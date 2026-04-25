@@ -1,0 +1,417 @@
+# ChainWill — Backend Integration Guide
+
+## Overview
+
+ChainWill is a decentralized digital will system built on Ethereum. It allows users ("owners") to deposit ERC20 tokens into a smart contract, designate beneficiaries with percentage-based allocations, and appoint trusted signers who can trigger the will if the owner becomes inactive or if a multisig threshold is met.
+
+The system is modular, using a factory pattern to deploy individual will instances.
+
+---
+
+## Architecture
+
+```
+ChainWillFactory
+    └── creates → ChainWill (individual will instances)
+            ├── FundingModule     (deposits, withdrawals, check-ins)
+            ├── BeneficiaryModule (beneficiary CRUD + claims)
+            ├── SignerModule      (signer management + multisig trigger)
+            └── TriggerModule     (time-based trigger logic)
+```
+
+All modules share a single storage struct (`WillLib.WillStorage`) via `WillBase` to avoid storage collision in the diamond-like inheritance pattern.
+
+---
+
+## Contract Addresses You Need to Track
+
+| Contract | Purpose |
+|----------|---------|
+| `ChainWillFactory` | Deploy once. All wills are created through this. |
+| `ChainWill` (per user) | Individual will instance per owner. |
+
+---
+
+## Core Data Structures
+
+### WillStorage (shared across all modules)
+```solidity
+struct WillStorage {
+    // Core
+    address owner;                    // Will owner
+    address token;                    // ERC20 token address
+    address pendingRecoveryWallet;    // Pending wallet recovery
+    bool locked;                      // True after trigger
+    bool triggered;                   // True after trigger
+    uint256 lastCheckIn;              // Last owner check-in timestamp
+    uint256 inactivityPeriod;         // Seconds before attestation starts
+    uint256 gracePeriod;              // Seconds of grace before trigger (default: 7 days)
+    uint256 triggeredAt;              // Timestamp when triggered
+    uint256 finalPool;                // Final deposit amount at trigger
+    uint256 totalDeposited;           // Tracked deposits (not live balance)
+
+    // Percent allocation
+    uint256 totalPercentAllocated;    // Sum of all beneficiary percentages (basis points)
+
+    // Reentrancy
+    bool lockedReentrancy;
+
+    // Signers
+    address[] signers;
+    mapping(address => bool) isSigner;
+    mapping(address => bool) hasSigned;
+    uint256 signatureCount;
+    uint256 requiredSignatures;       // 1 if single signer, else 2
+
+    // Beneficiaries
+    Beneficiary[] beneficiaries;
+    uint256 beneficiaryIdCounter;
+    mapping(uint256 => uint256) idToIndex;
+}
+```
+
+### Beneficiary
+```solidity
+struct Beneficiary {
+    uint256 id;           // Unique ID (starts at 1)
+    address wallet;       // Beneficiary wallet
+    uint256 percent;      // Basis points (10000 = 100%)
+    bool claimed;         // Has claimed?
+    uint256 claimedAt;    // Claim timestamp
+}
+```
+
+**Important:** Percentages use basis points. `10_000` = 100%.
+
+---
+
+## Factory Contract (`ChainWillFactory`)
+
+### Constructor
+- Sets `admin = msg.sender` (deployer)
+
+### Functions
+
+#### `createWill(address token, address[] signers, uint256 inactivityPeriod) → address will`
+Creates a new ChainWill instance.
+- `token`: ERC20 token address (cannot be zero)
+- `signers`: Array of signer addresses (must have at least 1, cannot include owner)
+- `inactivityPeriod`: Seconds of inactivity before attestation window opens (must be > 0)
+- Returns: Address of the newly deployed will contract
+- Emits: `WillCreated(will, msg.sender, token)`
+
+**Note:** The caller (`msg.sender`) becomes the will owner.
+
+#### `getWillsByOwner(address owner) → address[]`
+Returns all will addresses created by a specific owner.
+
+#### `getAllWills() → address[]`
+Returns all deployed will addresses.
+
+#### `totalWills() → uint256`
+Returns total number of wills deployed.
+
+#### `isWill(address) → bool`
+Returns true if address is a valid will created by the factory.
+
+#### `admin() → address`
+Returns the factory admin.
+
+---
+
+## Will Contract (`ChainWill`)
+
+### Constructor (called by factory)
+```solidity
+constructor(
+    address _token,
+    address[] memory _signers,
+    uint256 _inactivityPeriod,
+    address _owner
+)
+```
+- Validates all inputs
+- Sets `requiredSignatures = 1` if single signer, else `2`
+- Sets `gracePeriod = 7 days`
+- Sets `lastCheckIn = block.timestamp`
+
+---
+
+## Module: FundingModule
+
+Handles all token deposits, withdrawals, and owner activity tracking.
+
+### `deposit(uint256 amount)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `amount > 0`
+- **Action:** Transfers `amount` tokens from owner to will contract
+- **Effect:** Increases `totalDeposited`
+- **Emits:** `Deposited(owner, amount)`
+- **Prerequisite:** Owner must have approved the will contract to spend tokens
+
+### `withdraw(uint256 amount)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `amount > 0`, `totalDeposited >= amount`
+- **Action:** Transfers `amount` tokens back to owner
+- **Effect:** Decreases `totalDeposited`
+- **Emits:** `Withdrawn(owner, amount)`
+
+### `checkIn()`
+- **Caller:** Owner only
+- **Requires:** `!locked`
+- **Action:** Resets `lastCheckIn = block.timestamp`
+- **Emits:** `CheckIn(owner, block.timestamp)`
+- **Purpose:** Owner signals they are active, resetting the inactivity timer
+
+### `setGracePeriod(uint256 newGracePeriod)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `newGracePeriod > 0`
+- **Emits:** `GracePeriodUpdated(old, newGracePeriod)`
+
+### `setInactivityPeriod(uint256 newPeriod)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `newPeriod > 0`
+- **Emits:** `InactivityPeriodUpdated(old, newPeriod)`
+
+### View Functions
+- `getTotalDeposited() → uint256`
+- `getOwner() → address`
+- `getToken() → address`
+- `isLocked() → bool`
+
+---
+
+## Module: BeneficiaryModule
+
+Manages beneficiaries who can claim funds after the will is triggered.
+
+### `addBeneficiary(address wallet, uint256 percent)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `wallet != 0`, `percent > 0`, `totalPercentAllocated + percent <= 10_000`
+- **Requires:** No duplicate wallet addresses
+- **Effect:** Adds beneficiary with auto-incremented ID
+- **Emits:** `BeneficiaryAdded(id, wallet, percent)`
+
+### `removeBeneficiary(uint256 id)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, valid ID
+- **Effect:** Removes beneficiary, updates `totalPercentAllocated`, maintains array via swap-pop
+- **Emits:** `BeneficiaryRemoved(id, wallet)`
+
+### `updateBeneficiary(uint256 id, uint256 newPercent)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, valid ID, `newPercent > 0`, new total <= 10_000
+- **Emits:** `BeneficiaryUpdated(id, wallet, oldPercent, newPercent)`
+
+### `claim(uint256 id)`
+- **Caller:** The beneficiary wallet associated with `id`
+- **Requires:** `triggered == true`, `finalPool > 0`, not already claimed
+- **Action:** Transfers `(finalPool * percent) / 10_000` tokens to beneficiary
+- **Effect:** Sets `claimed = true`, `claimedAt = block.timestamp`
+- **Emits:** `BeneficiaryClaimed(id, wallet, amount)`
+- **Security:** Protected against reentrancy
+
+### View Functions
+- `getBeneficiaries() → Beneficiary[]`
+- `beneficiaryCount() → uint256`
+- `remainingPercent() → uint256` (returns `10_000 - totalPercentAllocated`)
+
+---
+
+## Module: SignerModule
+
+Manages trusted signers who can trigger the will via multisig or time-based attestation.
+
+### `triggerBySigners()`
+- **Caller:** Signer only
+- **Requires:** `!triggered`, `!hasSigned[msg.sender]`, beneficiaries exist, funds exist
+- **Effect:** Records signature. If `signatureCount >= requiredSignatures`, triggers the will.
+- **Emits:** `SignerAttested(signer, signatureCount, requiredSignatures)`
+- **Emits:** `WillLocked(timestamp)` (if threshold met)
+
+### `revokeAttestation()`
+- **Caller:** Signer only
+- **Requires:** `!triggered`, `hasSigned[msg.sender]`
+- **Effect:** Removes signature, decrements `signatureCount`
+- **Emits:** `AttestationRevoked(signer, signatureCount)`
+
+### `replaceSigner(address oldSigner, address newSigner)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `oldSigner` is valid signer, `newSigner` not already signer, `newSigner != owner`
+- **Effect:** Replaces signer in array and mappings. If old signer had signed, removes their vote.
+- **Emits:** `SignerReplaced(oldSigner, newSigner)`
+
+### View Functions
+- `getSigners() → address[]`
+
+---
+
+## Module: TriggerModule
+
+Handles time-based triggering after owner inactivity.
+
+### `triggerByTime()`
+- **Caller:** Signer only
+- **Requires:** `!triggered`, `block.timestamp >= claimTriggerAt()`, beneficiaries exist, funds exist
+- **Effect:** Triggers the will, locks it, sets `finalPool = totalDeposited`
+- **Emits:** `InactivityTriggered(triggeredBy, triggeredAt, attestationStart, claimTrigger)`
+- **Emits:** `WillLocked(timestamp)`
+
+### Time Calculation Helpers
+- `attestationStartAt() → uint256`: `lastCheckIn + inactivityPeriod`
+- `claimTriggerAt() → uint256`: `attestationStartAt() + gracePeriod`
+- `timeUntilTrigger() → uint256`: Seconds until trigger is available (0 if past)
+
+### View Functions
+- `isTriggered() → bool`
+- `getFinalPool() → uint256`
+
+---
+
+## Wallet Recovery System
+
+### `requestWalletChange(address newWallet)`
+- **Caller:** Owner only
+- **Requires:** `!locked`, `newWallet != 0`, `newWallet != owner`
+- **Effect:** Sets `pendingRecoveryWallet = newWallet`
+- **Emits:** `RecoveryRequested(newWallet)`
+
+### `confirmWalletChange()`
+- **Caller:** `pendingRecoveryWallet` address only
+- **Requires:** `!locked`
+- **Effect:** Transfers ownership: `owner = pendingRecoveryWallet`, clears pending
+- **Emits:** `WalletRecovered(oldOwner, newOwner)`
+
+---
+
+## Events Reference
+
+```solidity
+event Deposited(address indexed owner, uint256 amount);
+event Withdrawn(address indexed owner, uint256 amount);
+event CheckIn(address indexed owner, uint256 timestamp);
+event WillLocked(uint256 timestamp);
+
+event GracePeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
+event InactivityPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
+
+event InactivityTriggered(
+    address indexed triggeredBy,
+    uint256 triggeredAt,
+    uint256 attestationStart,
+    uint256 claimTrigger
+);
+
+event SignerAttested(
+    address indexed signer,
+    uint256 signatureCount,
+    uint256 requiredSignatures
+);
+event AttestationRevoked(address indexed signer, uint256 signatureCount);
+event SignerReplaced(address indexed oldSigner, address indexed newSigner);
+
+event BeneficiaryAdded(uint256 indexed id, address indexed wallet, uint256 percent);
+event BeneficiaryUpdated(uint256 indexed id, address indexed wallet, uint256 oldPercent, uint256 newPercent);
+event BeneficiaryRemoved(uint256 indexed id, address indexed wallet);
+event BeneficiaryClaimed(uint256 indexed id, address indexed wallet, uint256 amount);
+
+event RecoveryRequested(address indexed newWallet);
+event WalletRecovered(address indexed oldOwner, address indexed newOwner);
+event WillCreated(address indexed will, address indexed owner, address indexed token);
+```
+
+---
+
+## Backend Implementation Checklist
+
+### Indexing & Database
+- [ ] Index `WillCreated` events to track all deployed wills
+- [ ] Index `Deposited`, `Withdrawn` events for balance history
+- [ ] Index `BeneficiaryAdded`, `BeneficiaryUpdated`, `BeneficiaryRemoved` for beneficiary state
+- [ ] Index `SignerAttested`, `AttestationRevoked` for multisig state
+- [ ] Index `WillLocked` to mark wills as triggered
+- [ ] Index `BeneficiaryClaimed` for claim history
+- [ ] Index `WalletRecovered` for ownership changes
+
+### API Endpoints to Build
+- [ ] `GET /wills/:owner` — Get all wills for an owner
+- [ ] `GET /will/:address` — Get full will state (owner, token, balances, config)
+- [ ] `GET /will/:address/beneficiaries` — Get all beneficiaries
+- [ ] `GET /will/:address/signers` — Get all signers and their attestation status
+- [ ] `GET /will/:address/trigger-status` — Get trigger timing info
+- [ ] `POST /will/:address/simulate-claim` — Calculate claim amount for a beneficiary
+
+### Background Jobs
+- [ ] **Trigger Monitor:** Poll or use event listeners to detect when `claimTriggerAt()` is reached
+- [ ] **Notification Service:** Alert signers when attestation window opens
+- [ ] **Claim Monitor:** Track unclaimed funds post-trigger and notify beneficiaries
+
+### Security Considerations
+- [ ] Always verify `isWill()` before processing will-specific requests
+- [ ] Use `totalDeposited` not `token.balanceOf(will)` for calculations
+- [ ] Validate that percentages sum to ≤ 10_000 before any UI display
+- [ ] Never expose private keys; backend should only read, never sign
+
+### Integration Flow
+1. User connects wallet → Frontend
+2. Frontend calls `factory.createWill(token, signers, inactivityPeriod)`
+3. Indexer catches `WillCreated` event → Stores in DB
+4. Owner calls `deposit(amount)` → Requires ERC20 `approve()` first
+5. Owner calls `addBeneficiary(wallet, percent)` → Repeat for each
+6. Owner calls `checkIn()` periodically to reset timer
+7. If inactive: Signers call `triggerByTime()` or `triggerBySigners()`
+8. After trigger: Beneficiaries call `claim(id)`
+
+---
+
+## Error Messages Reference
+
+| Error | Function | Meaning |
+|-------|----------|---------|
+| `"Invalid token"` | createWill | Token address is zero |
+| `"No signers"` | createWill | Empty signers array |
+| `"Invalid period"` | createWill | inactivityPeriod is 0 |
+| `"Not owner"` | Various | Caller is not the will owner |
+| `"Locked"` | Various | Will has been triggered and locked |
+| `"Invalid amount"` | deposit/withdraw | Amount is 0 |
+| `"Insufficient funds"` | withdraw | Withdraw exceeds totalDeposited |
+| `"Transfer failed"` | deposit/withdraw/claim | ERC20 transfer failed |
+| `"Not signer"` | triggerBySigners, triggerByTime | Caller is not a signer |
+| `"Already triggered"` | triggerBySigners, triggerByTime | Will already triggered |
+| `"Already signed"` | triggerBySigners | Signer already attested |
+| `"Not signed"` | revokeAttestation | Signer hasn't attested |
+| `"No beneficiaries"` | triggerBySigners, triggerByTime | No beneficiaries added |
+| `"No funds"` | triggerBySigners, triggerByTime | totalDeposited is 0 |
+| `"Too early"` | triggerByTime | Not yet past claimTriggerAt |
+| `"Invalid wallet"` | addBeneficiary | Wallet is zero address |
+| `"Invalid percent"` | addBeneficiary | Percent is 0 |
+| `"Exceeds 100%"` | addBeneficiary | Total percent > 10_000 |
+| `"Duplicate"` | addBeneficiary | Wallet already a beneficiary |
+| `"Invalid id"` | removeBeneficiary, updateBeneficiary, claim | Invalid beneficiary ID |
+| `"Id mismatch"` | removeBeneficiary | Internal ID mapping error |
+| `"Already claimed"` | claim | Beneficiary already claimed |
+| `"Not beneficiary"` | claim | Caller is not the beneficiary wallet |
+| `"Zero share"` | claim | Calculated share is 0 |
+| `"Reentrant"` | claim | Reentrancy detected |
+| `"Not a signer"` | replaceSigner | oldSigner is not a signer |
+| `"Already signer"` | replaceSigner | newSigner is already a signer |
+| `"Owner cannot be signer"` | replaceSigner, constructor | Owner/signer conflict |
+| `"Same owner"` | requestWalletChange | newWallet is current owner |
+| `"Not pending wallet"` | confirmWalletChange | Caller is not pendingRecoveryWallet |
+| `"Invalid grace"` | setGracePeriod | newGracePeriod is 0 |
+| `"Invalid inactivity"` | constructor | inactivityPeriod is 0 |
+| `"Invalid signer"` | constructor | Signer is zero address |
+| `"Duplicate signer"` | constructor | Duplicate in signers array |
+
+---
+
+## Deployment Notes
+
+1. Deploy `ChainWillFactory` first
+2. Factory deploys `ChainWill` instances via `createWill()`
+3. Each will is independent with its own address
+4. Factory tracks all wills for discovery
+
+## Version
+Solidity ^0.8.20
+
