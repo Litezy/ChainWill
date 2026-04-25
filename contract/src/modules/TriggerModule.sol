@@ -29,8 +29,24 @@ abstract contract TriggerModule is WillBase, IEvents {
     function _trigger() internal virtual {
         s.triggered = true;
         s.locked = true;
+        //send 0.5% of the money to platform as fees
+        // get the balance 
+        uint256 currentBalance = s.totalDeposited;
+
+        // Calculate 0.5% fee
+        uint256 fee = (currentBalance * s.PLATFORM_FEE_BP) / 10_000;
+
+        // Transfer fee to platform
+        if (fee > 0 && s.platformAddress != address(0)) {
+           require(
+            IERC20(s.token).transfer(s.platformAddress, fee),
+            "Fee transfer failed"
+        );
+        // reduce tracked balance
+        s.totalDeposited -= fee;
+        }
+        s.finalPool = currentBalance - fee;
         s.triggeredAt = block.timestamp;
-        s.finalPool = s.totalDeposited;
         emit WillLocked(block.timestamp);
     }
 
