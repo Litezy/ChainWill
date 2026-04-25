@@ -27,7 +27,6 @@ contract ChainWillFactory is IEvents {
     }
 
     function createWill(
-        address token,
         address[] memory signers,
         uint256 inactivityPeriod
     ) external returns (address will) {
@@ -40,7 +39,8 @@ contract ChainWillFactory is IEvents {
                 token,
                 signers,
                 inactivityPeriod,
-                msg.sender  // caller is the will owner
+                msg.sender , // caller is the will owner
+                admin //platform address
             )
         );
 

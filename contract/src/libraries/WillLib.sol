@@ -23,6 +23,8 @@ library WillLib {
         uint256 triggeredAt;
         uint256 finalPool;
         uint256 totalDeposited;
+        address public platformAddress
+        uint256 PLATFORM_FEE_BP = 50;
 
         // percent
         uint256 totalPercentAllocated;

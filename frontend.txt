@@ -1,522 +1,378 @@
-# ChainWill — Frontend Integration Guide
-
-## Overview
-
-ChainWill is a decentralized digital will DApp. Users create a "will" smart contract that holds ERC20 tokens. If the owner becomes inactive or signers agree, the will "triggers" and beneficiaries can claim their allocated shares.
-
-This guide covers all smart contract interactions your frontend needs to implement.
-
----
-
-## User Roles
-
-| Role | Description |
-|------|-------------|
-| **Owner** | Creates the will, deposits tokens, manages beneficiaries/signers, checks in periodically |
-| **Signer** | Trusted party who can attest/trigger the will. Cannot be the owner. |
-| **Beneficiary** | Receives tokens after will is triggered. Claims using their wallet. |
-
----
-
-## Architecture Summary
-
-```
-ChainWillFactory (single instance)
-    └── createWill() → deploys ChainWill
-
-ChainWill (one per owner)
-    ├── FundingModule
-    │   ├── deposit() / withdraw()
-    │   └── checkIn()
-    ├── BeneficiaryModule
-    │   ├── addBeneficiary() / removeBeneficiary() / updateBeneficiary()
-    │   └── claim()
-    ├── SignerModule
-    │   ├── triggerBySigners() / revokeAttestation()
-    │   └── replaceSigner()
-    └── TriggerModule
-        └── triggerByTime()
-```
-
----
-
-## Contract ABIs You Need
-
-You need the ABIs for:
-1. `ChainWillFactory` — for creating wills
-2. `ChainWill` — for all will interactions
-3. `IERC20` — for token approvals and balance checks
-
-**Key:** All percentages are in **basis points** (`10000` = 100%).
-
----
-
-## Flow 1: Create a Will
-
-### Step 1: Gather User Input
-- **Token Address**: ERC20 token the will will hold (e.g., USDC, DAI)
-- **Signers**: Array of wallet addresses (minimum 1, cannot include owner)
-- **Inactivity Period**: Seconds before the will can be triggered (e.g., `365 days = 31536000`)
-
-### Step 2: Call Factory
-```javascript
-const factory = new ethers.Contract(factoryAddress, factoryABI, signer);
-
-const tx = await factory.createWill(
-    tokenAddress,           // ERC20 token
-    [signer1, signer2],     // Signer addresses
-    31536000                // 365 days in seconds
-);
-const receipt = await tx.wait();
-
-// Parse WillCreated event to get the new will address
-const event = receipt.events.find(e => e.event === 'WillCreated');
-const willAddress = event.args.will;
-```
-
-### Step 3: Store Will Address
-Save `willAddress` locally or in your backend. The owner can retrieve it via:
-```javascript
-const wills = await factory.getWillsByOwner(ownerAddress);
-```
-
----
-
-## Flow 2: Deposit Tokens
-
-### Prerequisites
-1. Token approval MUST happen before deposit
-
-### Step 1: Approve Tokens
-```javascript
-const token = new ethers.Contract(tokenAddress, erc20ABI, signer);
-const willAddress = '0x...'; // The will contract address
-
-// Approve will to spend tokens
-const approveTx = await token.approve(willAddress, amount);
-await approveTx.wait();
-```
-
-### Step 2: Deposit
-```javascript
-const will = new ethers.Contract(willAddress, chainWillABI, signer);
-const depositTx = await will.deposit(amount);
-await depositTx.wait();
-// Emits: Deposited(owner, amount)
-```
-
----
-
-## Flow 3: Manage Beneficiaries
-
-### Add Beneficiary
-```javascript
-// percent in basis points: 5000 = 50%, 10000 = 100%
-const tx = await will.addBeneficiary(beneficiaryWallet, 5000);
-await tx.wait();
-// Emits: BeneficiaryAdded(id, wallet, percent)
-```
-
-### Update Beneficiary
-```javascript
-// Change beneficiary 1 to 30%
-const tx = await will.updateBeneficiary(1, 3000);
-await tx.wait();
-// Emits: BeneficiaryUpdated(id, wallet, oldPercent, newPercent)
-```
-
-### Remove Beneficiary
-```javascript
-// Remove beneficiary with ID 1
-const tx = await will.removeBeneficiary(1);
-await tx.wait();
-// Emits: BeneficiaryRemoved(id, wallet)
-```
-
-### Get All Beneficiaries
-```javascript
-const beneficiaries = await will.getBeneficiaries();
-// Returns: [{id, wallet, percent, claimed, claimedAt}, ...]
-```
-
-### Check Remaining Allocation
-```javascript
-const remaining = await will.remainingPercent();
-// Returns: basis points remaining (e.g., 3000 = 30% left)
-```
-
----
-
-## Flow 4: Owner Check-In
-
-The owner MUST periodically check in to reset the inactivity timer.
-
-```javascript
-const tx = await will.checkIn();
-await tx.wait();
-// Emits: CheckIn(owner, timestamp)
-// Resets lastCheckIn = block.timestamp
-```
-
-**UI Recommendation:** Show a countdown timer:
-```javascript
-const lastCheckIn = await will.lastCheckIn(); // not directly accessible, use events or view
-const inactivityPeriod = await will.inactivityPeriod(); // not directly accessible
-// Calculate: attestationStart = lastCheckIn + inactivityPeriod
-```
-
-Use these view functions instead:
-```javascript
-const attestationStart = await will.attestationStartAt();
-const claimTrigger = await will.claimTriggerAt();
-const timeRemaining = await will.timeUntilTrigger();
-```
-
----
-
-## Flow 5: Trigger the Will
-
-### Method A: Time-Based Trigger (Owner Inactivity)
-Signers can trigger if owner has been inactive past the grace period.
-
-```javascript
-// Only signers can call this
-const tx = await will.triggerByTime();
-await tx.wait();
-// Emits: InactivityTriggered(...), WillLocked(...)
-```
-
-**Preconditions for success:**
-- Caller is a signer
-- `block.timestamp >= claimTriggerAt()`
-- Beneficiaries exist
-- Funds deposited
-
-### Method B: Multisig Trigger (Signer Attestation)
-Signers attest until threshold is met.
-
-```javascript
-// Each signer calls this
-const tx = await will.triggerBySigners();
-await tx.wait();
-// Emits: SignerAttested(signer, count, required)
-// If count >= required: WillLocked emitted
-```
-
-**Signature Requirements:**
-- 1 signer → requires 1 signature
-- 2+ signers → requires 2 signatures
-
-### Revoke Attestation
-A signer can undo their attestation if the owner returns:
-```javascript
-const tx = await will.revokeAttestation();
-await tx.wait();
-// Emits: AttestationRevoked(signer, count)
-```
-
----
-
-## Flow 6: Claim Funds (Beneficiary)
-
-After the will is triggered, beneficiaries claim their share.
-
-```javascript
-// Get my beneficiary ID from getBeneficiaries()
-const beneficiaries = await will.getBeneficiaries();
-const myId = beneficiaries.find(b => b.wallet === myAddress).id;
-
-// Claim
-const tx = await will.claim(myId);
-await tx.wait();
-// Emits: BeneficiaryClaimed(id, wallet, amount)
-```
-
-**Preconditions:**
-- Will is triggered
-- Caller is the beneficiary wallet
-- Not already claimed
-
-### Calculate Claim Amount (Off-chain)
-```javascript
-const finalPool = await will.getFinalPool();
-const beneficiary = await will.getBeneficiaries().then(b => b.find(...));
-const claimAmount = (finalPool * beneficiary.percent) / 10000;
-```
-
----
-
-## Flow 7: Wallet Recovery
-
-If owner loses access, they can recover to a new wallet.
-
-### Step 1: Request Recovery
-```javascript
-const tx = await will.requestWalletChange(newWalletAddress);
-await tx.wait();
-// Emits: RecoveryRequested(newWallet)
-```
-
-### Step 2: Confirm Recovery
-The NEW wallet must confirm:
-```javascript
-// Connect with NEW wallet
-const tx = await will.confirmWalletChange();
-await tx.wait();
-// Emits: WalletRecovered(oldOwner, newOwner)
-```
-
----
-
-## Flow 8: Withdraw Funds (Owner)
-
-Owner can withdraw before trigger:
-```javascript
-const tx = await will.withdraw(amount);
-await tx.wait();
-// Emits: Withdrawn(owner, amount)
-```
-
----
-
-## Flow 9: Update Config
-
-### Change Grace Period
-```javascript
-const tx = await will.setGracePeriod(14 * 24 * 60 * 60); // 14 days
-await tx.wait();
-// Emits: GracePeriodUpdated(old, new)
-```
-
-### Change Inactivity Period
-```javascript
-const tx = await will.setInactivityPeriod(180 * 24 * 60 * 60); // 180 days
-await tx.wait();
-// Emits: InactivityPeriodUpdated(old, new)
-```
-
----
-
-## Flow 10: Manage Signers
-
-### Replace a Signer
-```javascript
-const tx = await will.replaceSigner(oldSignerAddress, newSignerAddress);
-await tx.wait();
-// Emits: SignerReplaced(old, new)
-```
-
-### Get All Signers
-```javascript
-const signers = await will.getSigners();
-// Returns: [signer1, signer2, ...]
-```
-
----
-
-## View Functions Reference
-
-| Function | Returns | Use Case |
-|----------|---------|----------|
-| `getOwner()` | `address` | Display owner |
-| `getToken()` | `address` | Show token info |
-| `isLocked()` | `bool` | Check if triggered |
-| `getFinalPool()` | `uint256` | Total funds to distribute |
-| `getTotalDeposited()` | `uint256` | Current deposit balance |
-| `getBeneficiaries()` | `Beneficiary[]` | List all beneficiaries |
-| `beneficiaryCount()` | `uint256` | Number of beneficiaries |
-| `remainingPercent()` | `uint256` | Unallocated % (basis points) |
-| `getSigners()` | `address[]` | List all signers |
-| `isTriggered()` | `bool` | Check trigger status |
-| `attestationStartAt()` | `uint256` | When attestation window opens |
-| `claimTriggerAt()` | `uint256` | When time-based trigger is allowed |
-| `timeUntilTrigger()` | `uint256` | Seconds until trigger (0 if ready) |
-
-### Factory View Functions
-
-| Function | Returns | Use Case |
-|----------|---------|----------|
-| `getWillsByOwner(owner)` | `address[]` | Get user's wills |
-| `getAllWills()` | `address[]` | List all wills |
-| `totalWills()` | `uint256` | Total count |
-| `isWill(address)` | `bool` | Validate will address |
-
----
-
-## Events Reference (For Indexing/UI Updates)
-
-```solidity
-// Funding
-event Deposited(address indexed owner, uint256 amount);
-event Withdrawn(address indexed owner, uint256 amount);
-event CheckIn(address indexed owner, uint256 timestamp);
-
-// Trigger
-event WillLocked(uint256 timestamp);
-event InactivityTriggered(address indexed triggeredBy, uint256 triggeredAt, uint256 attestationStart, uint256 claimTrigger);
-
-// Config
-event GracePeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
-event InactivityPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
-
-// Signers
-event SignerAttested(address indexed signer, uint256 signatureCount, uint256 requiredSignatures);
-event AttestationRevoked(address indexed signer, uint256 signatureCount);
-event SignerReplaced(address indexed oldSigner, address indexed newSigner);
-
-// Beneficiaries
-event BeneficiaryAdded(uint256 indexed id, address indexed wallet, uint256 percent);
-event BeneficiaryUpdated(uint256 indexed id, address indexed wallet, uint256 oldPercent, uint256 newPercent);
-event BeneficiaryRemoved(uint256 indexed id, address indexed wallet);
-event BeneficiaryClaimed(uint256 indexed id, address indexed wallet, uint256 amount);
-
-// Recovery
-event RecoveryRequested(address indexed newWallet);
-event WalletRecovered(address indexed oldOwner, address indexed newOwner);
-
-// Factory
-event WillCreated(address indexed will, address indexed owner, address indexed token);
-```
-
----
-
-## UI/UX Recommendations
-
-### Dashboard for Owner
-- [ ] Display current deposited balance
-- [ ] Show countdown to attestation start
-- [ ] List all beneficiaries with percentages
-- [ ] List all signers with attestation status
-- [ ] "Check In" button (prominent if close to attestation)
-- [ ] "Deposit" / "Withdraw" buttons
-- [ ] "Add Beneficiary" form (validate total ≤ 100%)
-
-### Dashboard for Signers
-- [ ] List wills where user is a signer
-- [ ] Show attestation status (signed/not signed)
-- [ ] "Attest" button (if not triggered)
-- [ ] "Revoke" button (if already attested and not triggered)
-- [ ] "Trigger by Time" button (if past claimTriggerAt)
-
-### Dashboard for Beneficiaries
-- [ ] List wills where user is a beneficiary
-- [ ] Show claim status (pending/available/claimed)
-- [ ] Display expected claim amount
-- [ ] "Claim" button (only if triggered and not claimed)
-
-### Important Timers to Display
-```javascript
-// For owners
-const now = Math.floor(Date.now() / 1000);
-const attestationStart = await will.attestationStartAt();
-const claimTrigger = await will.claimTriggerAt();
-const timeLeft = Math.max(0, attestationStart - now);
-
-// Format as: "Check in within 5 days 3 hours"
-```
-
----
-
-## Error Handling Guide
-
-| Error Message | When It Happens | User-Friendly Message |
-|---------------|-----------------|----------------------|
-| `"Not owner"` | Non-owner calls owner-only function | "Only the will owner can do this" |
-| `"Locked"` | Action on triggered will | "This will has been triggered and is locked" |
-| `"Not signer"` | Non-signer tries to trigger | "You are not a registered signer" |
-| `"Already triggered"` | Trigger when already done | "This will has already been triggered" |
-| `"Already signed"` | Signer attests twice | "You have already attested" |
-| `"Too early"` | triggerByTime before deadline | "The attestation period has not ended yet" |
-| `"Exceeds 100%"` | Add beneficiary over 100% | "Total allocation cannot exceed 100%" |
-| `"Duplicate"` | Add same wallet twice | "This wallet is already a beneficiary" |
-| `"Already claimed"` | Claim twice | "You have already claimed your share" |
-| `"Not beneficiary"` | Wrong wallet claims | "You are not a beneficiary on this will" |
-| `"Invalid amount"` | Deposit/withdraw 0 | "Amount must be greater than 0" |
-| `"Insufficient funds"` | Withdraw too much | "Insufficient funds in the will" |
-
----
-
-## Web3 Integration Snippets
-
-### Connect to Will
-```javascript
-const provider = new ethers.providers.Web3Provider(window.ethereum);
-const signer = provider.getSigner();
-const will = new ethers.Contract(willAddress, CHAIN_WILL_ABI, signer);
-```
-
-### Check if User is Owner
-```javascript
-const owner = await will.getOwner();
-const isOwner = (await signer.getAddress()).toLowerCase() === owner.toLowerCase();
-```
-
-### Check if User is Signer
-```javascript
-const signers = await will.getSigners();
-const userAddress = await signer.getAddress();
-const isSigner = signers.includes(userAddress);
-```
-
-### Check if User is Beneficiary
-```javascript
-const beneficiaries = await will.getBeneficiaries();
-const userAddress = await signer.getAddress();
-const myBeneficiary = beneficiaries.find(b => 
-    b.wallet.toLowerCase() === userAddress.toLowerCase()
-);
-const isBeneficiary = myBeneficiary !== undefined;
-```
-
-### Calculate Countdown
-```javascript
-const timeUntilTrigger = await will.timeUntilTrigger();
-const days = Math.floor(timeUntilTrigger / 86400);
-const hours = Math.floor((timeUntilTrigger % 86400) / 3600);
-```
-
-### Format Basis Points
-```javascript
-function formatPercent(basisPoints) {
-    return (basisPoints / 100).toFixed(2) + '%';
+═══════════════════════════════════════════════════════════════
+CHAINWILL — FRONTEND INTEGRATION GUIDE
+═══════════════════════════════════════════════════════════════
+
+OVERVIEW
+────────
+ChainWill lets users create on-chain digital wills. The frontend
+needs to connect to MetaMask/WalletConnect, interact with the
+factory to deploy wills, and allow users to manage beneficiaries,
+signers, deposits, and claims.
+
+═══════════════════════════════════════════════════════════════
+CONTRACT ADDRESSES (update when deployed)
+═══════════════════════════════════════════════════════════════
+
+FACTORY_ADDRESS = "0x..."
+TOKEN_ADDRESS   = "0x..."
+CHAIN_ID        = 1  (or testnet id)
+
+═══════════════════════════════════════════════════════════════
+RECOMMENDED STACK
+═══════════════════════════════════════════════════════════════
+
+- wagmi + viem (contract interaction)
+- RainbowKit or ConnectKit (wallet connection)
+- React Query (data fetching/caching)
+- Zustand (local state)
+
+═══════════════════════════════════════════════════════════════
+ABIS NEEDED
+═══════════════════════════════════════════════════════════════
+
+You need two ABIs:
+1. ChainWillFactory ABI  — to create wills and read all wills
+2. ChainWill ABI         — to interact with individual will instances
+
+Request these from the smart contract team as JSON files.
+Store them in: src/abis/ChainWillFactory.json and ChainWill.json
+
+═══════════════════════════════════════════════════════════════
+PAGES / SCREENS NEEDED
+═══════════════════════════════════════════════════════════════
+
+1. /                  Home / Landing
+2. /dashboard         User's will overview
+3. /create            Create a new will
+4. /will/:address     Individual will management
+5. /claim             Beneficiary claim page
+6. /signer            Signer attestation page
+
+═══════════════════════════════════════════════════════════════
+PAGE 1 — CREATE WILL (/create)
+═══════════════════════════════════════════════════════════════
+
+User fills in:
+  - Token address (or select from list)
+  - Signer wallet addresses (min 1, max 5)
+  - Inactivity period (e.g. 365 days → pass as seconds: 365 * 24 * 60 * 60)
+
+Call:
+  factory.createWill(tokenAddress, signersArray, inactivityPeriodInSeconds)
+
+After tx confirmed:
+  - Read WillCreated event to get the new will address
+  - Redirect to /will/:newWillAddress
+
+VALIDATION:
+  - At least 1 signer
+  - No duplicate signers
+  - Signer address !== owner address
+  - inactivityPeriod > 0
+
+═══════════════════════════════════════════════════════════════
+PAGE 2 — DASHBOARD (/dashboard)
+═══════════════════════════════════════════════════════════════
+
+Read:
+  factory.getWillsByOwner(connectedWallet) → address[]
+
+For each will address, read:
+  will.getTotalDeposited()     → show balance
+  will.isTriggered()           → show status badge
+  will.isLocked()              → show locked badge
+  will.timeUntilTrigger()      → countdown timer
+  will.beneficiaryCount()      → number of beneficiaries
+  will.getSigners()            → list of signers
+
+Display as cards with:
+  - Will address (shortened)
+  - Status: Active / Triggered / Locked
+  - Balance
+  - Time remaining countdown
+  - Link to manage
+
+═══════════════════════════════════════════════════════════════
+PAGE 3 — WILL MANAGEMENT (/will/:address)
+═══════════════════════════════════════════════════════════════
+
+Only accessible by the will owner (check will.getOwner() === connectedWallet)
+
+TABS:
+  ① Overview
+  ② Deposit & Withdraw
+  ③ Beneficiaries
+  ④ Signers
+  ⑤ Settings
+
+─────────────────────────────────
+TAB ① OVERVIEW
+─────────────────────────────────
+Show:
+  - Total deposited: will.getTotalDeposited()
+  - Final pool (after fee): will.getFinalPool()
+  - Status: will.isTriggered() / will.isLocked()
+  - Time until trigger: will.timeUntilTrigger() → format as days/hours
+  - Attestation opens at: will.attestationStartAt() → format as date
+  - Trigger unlocks at: will.claimTriggerAt() → format as date
+  - Platform fee: 0.5% (shown as info)
+
+─────────────────────────────────
+TAB ② DEPOSIT & WITHDRAW
+─────────────────────────────────
+DEPOSIT FLOW:
+  Step 1: User inputs amount
+  Step 2: Call token.approve(willAddress, amount)
+  Step 3: Wait for approval tx
+  Step 4: Call will.deposit(amount)
+  Step 5: Show success + updated balance
+
+  NOTE: Show two-step UX — "Approve" button then "Deposit" button
+
+WITHDRAW FLOW:
+  - Input: amount
+  - Call: will.withdraw(amount)
+  - Guard: disabled if will.isLocked() === true
+
+CHECK-IN:
+  - Big prominent button: "I'M ALIVE — CHECK IN"
+  - Call: will.checkIn()
+  - Show last check-in date
+  - Show days remaining before inactivity triggers
+  - Color code: green → yellow → red as deadline approaches
+
+─────────────────────────────────
+TAB ③ BENEFICIARIES
+─────────────────────────────────
+READ:
+  will.getBeneficiaries() → array of:
+  {
+    id: uint256        ← USE THIS for all operations, NOT array index
+    wallet: address
+    percent: uint256   ← basis points (divide by 100 to show %)
+    claimed: bool
+    claimedAt: uint256
+  }
+
+  will.remainingPercent() → show how much % is still unallocated
+
+ADD BENEFICIARY:
+  Input: wallet address, percentage (user enters 50 → send as 5000)
+  Call: will.addBeneficiary(wallet, percentInBasisPoints)
+  Validation:
+    - Valid address
+    - Not duplicate
+    - Total allocation cannot exceed 100%
+    - Show running total as user adds
+
+REMOVE BENEFICIARY:
+  Button per row
+  Call: will.removeBeneficiary(beneficiary.id)
+  NOTE: pass the .id field, NOT the array position
+
+UPDATE BENEFICIARY:
+  Inline edit or modal
+  Call: will.updateBeneficiary(beneficiary.id, newPercentInBasisPoints)
+
+DISPLAY:
+  Show as table:
+  | Wallet        | Share   | Status   | Actions      |
+  | 0xAbc...1234  | 50%     | Pending  | Edit / Remove|
+  | 0xDef...5678  | 50%     | Claimed  | —            |
+
+  Show progress bar of total allocation:
+  [████████░░] 80% allocated, 20% remaining
+
+─────────────────────────────────
+TAB ④ SIGNERS
+─────────────────────────────────
+READ:
+  will.getSigners() → address[]
+
+REPLACE SIGNER:
+  Input: old signer address, new signer address
+  Call: will.replaceSigner(oldSigner, newSigner)
+
+DISPLAY:
+  List signers with:
+  - Address (shortened)
+  - Status: Has Signed / Not Signed (read from SignerAttested events)
+  - Replace button
+
+─────────────────────────────────
+TAB ⑤ SETTINGS
+─────────────────────────────────
+SET GRACE PERIOD:
+  Input: days → convert to seconds
+  Call: will.setGracePeriod(seconds)
+
+SET INACTIVITY PERIOD:
+  Input: days → convert to seconds
+  Call: will.setInactivityPeriod(seconds)
+
+WALLET RECOVERY:
+  Step 1: owner calls will.requestWalletChange(newWallet)
+  Step 2: NEW wallet connects and calls will.confirmWalletChange()
+  Show pending state between steps
+
+═══════════════════════════════════════════════════════════════
+PAGE 4 — CLAIM PAGE (/claim)
+═══════════════════════════════════════════════════════════════
+
+Anyone can visit. Show wills where connected wallet is a beneficiary.
+
+LOGIC:
+  - Read all wills from factory.getAllWills()
+  - For each will, call will.getBeneficiaries()
+  - Filter where beneficiary.wallet === connectedWallet
+  - Show only where will.isTriggered() === true
+
+DISPLAY:
+  | Will Address  | Your Share | Amount    | Status    | Action  |
+  | 0xAbc...      | 50%        | 500 USDC  | Unclaimed | Claim   |
+  | 0xDef...      | 30%        | 300 USDC  | Claimed   | ✓ Done  |
+
+CLAIM:
+  Call: will.claim(beneficiary.id)
+  NOTE: use beneficiary.id NOT array index
+
+CALCULATE DISPLAY AMOUNT:
+  amount = (will.getFinalPool() * beneficiary.percent) / 10000
+  Format with token decimals (usually 18)
+
+═══════════════════════════════════════════════════════════════
+PAGE 5 — SIGNER PAGE (/signer)
+═══════════════════════════════════════════════════════════════
+
+Show wills where connected wallet is a signer.
+
+LOGIC:
+  - Read all wills from factory.getAllWills()
+  - For each will, call will.getSigners()
+  - Filter where signer === connectedWallet
+
+DISPLAY per will:
+  - Will owner address
+  - Last check-in date (from CheckIn events via backend API)
+  - Days since last check-in
+  - Status: Owner Active / Inactivity Window Open / Trigger Available
+
+ACTIONS:
+  Attest (trigger by signers):
+    Call: will.triggerBySigners()
+    Show only if: will.isTriggered() === false
+
+  Revoke attestation:
+    Call: will.revokeAttestation()
+    Show only if: signer has already signed (track from SignerAttested events)
+
+  Trigger by time:
+    Call: will.triggerByTime()
+    Show only if: will.timeUntilTrigger() === 0 and !will.isTriggered()
+
+═══════════════════════════════════════════════════════════════
+BASIS POINTS CONVERSION (IMPORTANT)
+═══════════════════════════════════════════════════════════════
+
+The contract uses basis points internally:
+  10000 = 100%
+  5000  = 50%
+  500   = 5%
+  50    = 0.5%
+
+FRONTEND CONVERSION:
+  User enters:     50  (as percentage)
+  Send to contract: 50 * 100 = 5000
+
+  Contract returns: 5000
+  Display to user:  5000 / 100 = 50%
+
+═══════════════════════════════════════════════════════════════
+PLATFORM FEE DISPLAY
+═══════════════════════════════════════════════════════════════
+
+Fee = 0.5% deducted at trigger time.
+
+Show this clearly:
+  Total Deposited: 1000 USDC
+  Platform Fee:      -5 USDC  (0.5%)
+  Final Pool:       995 USDC  ← what beneficiaries split
+
+Formula:
+  fee = (totalDeposited * 50) / 10000
+  finalPool = totalDeposited - fee
+
+═══════════════════════════════════════════════════════════════
+TIME FORMATTING HELPERS
+═══════════════════════════════════════════════════════════════
+
+// convert seconds to human readable
+function formatSeconds(seconds) {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  if (days > 0) return `${days}d ${hours}h`
+  return `${hours}h`
 }
-// 5000 → "50.00%"
-// 10000 → "100.00%"
-```
 
----
+// convert basis points to percentage string
+function bpToPercent(bp) {
+  return (bp / 100).toFixed(2) + '%'
+}
 
-## Security Notes for Frontend
+// convert user percent input to basis points
+function percentToBp(percent) {
+  return Math.round(percent * 100)
+}
 
-1. **Always verify** `isWill()` before interacting with a will address
-2. **Never hardcode** will addresses; always derive from factory or events
-3. **Show confirmations** for irreversible actions (trigger, claim)
-4. **Validate inputs** client-side before sending transactions:
-   - Percentages ≤ 10,000
-   - Addresses are valid
-   - Amounts > 0
-5. **Handle token decimals** properly (USDC = 6, DAI = 18)
-6. **Monitor events** to update UI state instead of polling
+// format token amount from wei
+function formatAmount(wei, decimals = 18) {
+  return (Number(wei) / Math.pow(10, decimals)).toFixed(4)
+}
 
----
+═══════════════════════════════════════════════════════════════
+KEY UX RULES
+═══════════════════════════════════════════════════════════════
 
-## Testing Checklist
+1. ALWAYS show two-step flow for deposit (Approve → Deposit)
+2. Disable all write actions if will.isLocked() === true
+3. Use beneficiary.id NOT array index for all operations
+4. Show countdown timer prominently on dashboard
+5. Color code urgency:
+     > 30 days remaining → green
+     7-30 days           → yellow/amber
+     < 7 days            → red + pulsing warning
+6. Show platform fee (0.5%) transparently before deposit/trigger
+7. Check-in button should be the most prominent action on dashboard
+8. Show "You are a signer for X wills" and "You are a beneficiary of X wills"
+   in the navigation or profile section
 
-Before production, verify these flows:
-- [ ] Create will with 1 signer, 2 signers, 3+ signers
-- [ ] Deposit and withdraw tokens
-- [ ] Add beneficiaries up to 100%
-- [ ] Check-in resets timer
-- [ ] Time-based trigger works after inactivity + grace
-- [ ] Multisig trigger works with threshold
-- [ ] Revoke attestation works
-- [ ] Claim after trigger distributes correct amounts
-- [ ] Wallet recovery flow works
-- [ ] Replace signer works
-- [ ] Cannot actions after trigger (locked state)
+═══════════════════════════════════════════════════════════════
+EVENTS TO LISTEN FOR (real-time updates)
+═══════════════════════════════════════════════════════════════
 
----
+Use wagmi's useContractEvent or viem's watchContractEvent:
 
-## Version
-Solidity ^0.8.20
+WillCreated        → refresh dashboard after creating
+Deposited          → update balance display
+Withdrawn          → update balance display
+CheckIn            → update last check-in date + timer
+WillLocked         → show triggered banner, disable write actions
+BeneficiaryAdded   → refresh beneficiary list
+BeneficiaryRemoved → refresh beneficiary list
+BeneficiaryClaimed → update claim status
+SignerAttested     → update signer status
+AttestationRevoked → update signer status
 
+═══════════════════════════════════════════════════════════════
+NOTES
+═══════════════════════════════════════════════════════════════
+- All wills are separate contract instances — always use the
+  specific will address when calling ChainWill functions
+- The factory tracks ownership — use getWillsByOwner() to find
+  a user's wills efficiently (don't loop getAllWills() on frontend)
+- For signer/beneficiary pages, use the backend API to query
+  which wills a wallet is involved in — don't loop all wills
+  on the frontend (too slow)
+- Confirmed tx = 1 block confirmation is enough for UI update
+- Always handle the case where a user has NO will yet →
+  show "Create your first will" CTA
