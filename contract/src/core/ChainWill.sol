@@ -14,9 +14,10 @@ contract ChainWill is
     TriggerModule
 {
     constructor(
+        address _token,
         address[] memory _signers,
         uint256 _inactivityPeriod,
-        address _owner
+        address _owner,
         address _platform
     ) {
         require(_token != address(0), "Invalid token");
@@ -25,11 +26,12 @@ contract ChainWill is
         require(_owner != address(0), "Invalid owner");
 
         s.owner = _owner;
-        s.token = IERC20(0x731ddCd5366146614ceDde3ec26EC57CEf3Ee8e0);
+        s.token = _token;
         s.inactivityPeriod = _inactivityPeriod;
         s.gracePeriod = 7 days;
         s.lastCheckIn = block.timestamp;
         s.platformAddress = _platform;
+        s.PLATFORM_FEE_BP = 50;
 
         for (uint256 i = 0; i < _signers.length; i++) {
             address signer = _signers[i];

@@ -37,18 +37,23 @@ contract TriggerModuleTest is Test {
     }
 
     function test_triggerByTime() public {
-        // warp past inactivity + grace period
-        vm.warp(block.timestamp + 365 days + 7 days + 1);
+    vm.warp(block.timestamp + 365 days + 7 days + 1);
 
-        vm.prank(signer1);
-        will.triggerByTime();
+    vm.prank(signer1);
+    will.triggerByTime();
 
-        assertTrue(will.isTriggered());
-        assertTrue(will.isLocked());
-        assertEq(will.getFinalPool(), 100e18);
-    }
+    assertTrue(will.isTriggered());
+    assertTrue(will.isLocked());
 
-    function test_timeUntilTrigger() public {
+    // ✅ finalPool = deposited - 0.5% fee
+    uint256 deposited = 100e18;
+    uint256 fee       = (deposited * 50) / 10_000;
+    uint256 finalPool = deposited - fee;
+
+    assertEq(will.getFinalPool(), finalPool); // 99.5e18
+}
+
+    function test_timeUntilTrigger() public view {
         uint256 time = will.timeUntilTrigger();
         assertTrue(time > 0);
     }

@@ -84,40 +84,52 @@ contract BeneficiaryModuleTest is Test {
     }
 
     function test_claim() public {
-        vm.prank(owner);
-        will.addBeneficiary(alice, 10_000);
+    vm.prank(owner);
+    will.addBeneficiary(alice, 10_000);
 
-        // trigger
-        vm.prank(signer1);
-        will.triggerBySigners();
+    vm.prank(signer1);
+    will.triggerBySigners();
 
-        uint256 balBefore = token.balanceOf(alice);
+    // ✅ calculate expected after 0.5% fee
+    uint256 deposited = 100e18;
+    uint256 fee       = (deposited * 50) / 10_000; // 0.5e18
+    uint256 finalPool = deposited - fee;            // 99.5e18
 
-        vm.prank(alice);
-        will.claim(1);
+    uint256 balBefore = token.balanceOf(alice);
 
-        assertEq(token.balanceOf(alice), balBefore + 100e18);
-    }
+    vm.prank(alice);
+    will.claim(1);
 
-    function test_claimPartialShares() public {
-        vm.prank(owner);
-        will.addBeneficiary(alice, 6000);
+    assertEq(token.balanceOf(alice), balBefore + finalPool);
+}
 
-        vm.prank(owner);
-        will.addBeneficiary(bob, 4000);
+function test_claimPartialShares() public {
+    vm.prank(owner);
+    will.addBeneficiary(alice, 6000);
 
-        vm.prank(signer1);
-        will.triggerBySigners();
+    vm.prank(owner);
+    will.addBeneficiary(bob, 4000);
 
-        vm.prank(alice);
-        will.claim(1);
+    vm.prank(signer1);
+    will.triggerBySigners();
 
-        vm.prank(bob);
-        will.claim(2);
+    // ✅ calculate expected after 0.5% fee
+    uint256 deposited = 100e18;
+    uint256 fee       = (deposited * 50) / 10_000;  // 0.5e18
+    uint256 finalPool = deposited - fee;             // 99.5e18
 
-        assertEq(token.balanceOf(alice), 60e18);
-        assertEq(token.balanceOf(bob),   40e18);
-    }
+    uint256 aliceShare = (finalPool * 6000) / 10_000; // 59.7e18
+    uint256 bobShare   = (finalPool * 4000) / 10_000; // 39.8e18
+
+    vm.prank(alice);
+    will.claim(1);
+
+    vm.prank(bob);
+    will.claim(2);
+
+    assertEq(token.balanceOf(alice), aliceShare);
+    assertEq(token.balanceOf(bob),   bobShare);
+}
 
     // ── negative ───────────────────────────────────────────
     function test_revert_duplicateBeneficiary() public {
