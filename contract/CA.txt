@@ -1,1 +1,2 @@
 Chainwill Contract Address = 0x721Ff9CD2DECFD110e8099Da4fFf2d16ac273F7B
+ChainWIll Token Contract Address =0x9b068dC0418064C11d9bc563edC26890DD95a60e
