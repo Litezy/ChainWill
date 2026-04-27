@@ -15,9 +15,10 @@ contract SignerModuleTest is Test {
     address signer1 = makeAddr("signer1");
     address signer2 = makeAddr("signer2");
     address stranger = makeAddr("stranger");
+    address platform = makeAddr("platform");
 
     function setUp() public {
-        factory = new ChainWillFactory();
+        factory = new ChainWillFactory(platform);
         token   = new MockERC20();
         token.mint(owner, 1000e18);
 
@@ -32,8 +33,6 @@ contract SignerModuleTest is Test {
         vm.prank(owner);
         token.approve(address(will), type(uint256).max);
 
-        vm.prank(owner);
-        will.deposit(100e18);
 
         vm.prank(owner);
         will.addBeneficiary(makeAddr("ben"), 10_000);
@@ -75,35 +74,35 @@ contract SignerModuleTest is Test {
 
     // ── negative ───────────────────────────────────────────
     function test_revert_strangerTrigger() public {
-        vm.prank(stranger);
-        vm.expectRevert("Not signer");
-        will.triggerBySigners();
-    }
+    vm.prank(stranger);
+    vm.expectRevert("Not a registered signer"); // ✅
+    will.triggerBySigners();
+}
 
-    function test_revert_signTwice() public {
-        vm.prank(signer1);
-        will.triggerBySigners();
+function test_revert_signTwice() public {
+    vm.prank(signer1);
+    will.triggerBySigners();
 
-        vm.prank(signer1);
-        vm.expectRevert("Already signed");
-        will.triggerBySigners();
-    }
+    vm.prank(signer1);
+    vm.expectRevert("You have already attested"); // ✅
+    will.triggerBySigners();
+}
 
-    function test_revert_revokeWithoutSign() public {
-        vm.prank(signer1);
-        vm.expectRevert("Not signed");
-        will.revokeAttestation();
-    }
+function test_revert_revokeWithoutSign() public {
+    vm.prank(signer1);
+    vm.expectRevert("You have not attested yet"); // ✅
+    will.revokeAttestation();
+}
 
-    function test_revert_replaceWithOwner() public {
-        vm.prank(owner);
-        vm.expectRevert("Owner cannot be signer");
-        will.replaceSigner(signer1, owner);
-    }
+function test_revert_replaceWithOwner() public {
+    vm.prank(owner);
+    vm.expectRevert("Owner cannot be a signer"); // ✅
+    will.replaceSigner(signer1, owner);
+}
 
-    function test_revert_replaceNonSigner() public {
-        vm.prank(owner);
-        vm.expectRevert("Not a signer");
-        will.replaceSigner(stranger, makeAddr("x"));
-    }
+function test_revert_replaceNonSigner() public {
+    vm.prank(owner);
+    vm.expectRevert("Old address is not a signer"); // ✅
+    will.replaceSigner(stranger, makeAddr("x"));
+}
 }
