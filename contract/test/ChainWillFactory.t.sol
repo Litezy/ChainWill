@@ -12,9 +12,10 @@ contract ChainWillFactoryTest is Test {
     address owner   = makeAddr("owner");
     address signer1 = makeAddr("signer1");
     address signer2 = makeAddr("signer2");
+    address platform = makeAddr("platform");
 
     function setUp() public {
-        factory = new ChainWillFactory();
+        factory = new ChainWillFactory(platform);
         token   = new MockERC20();
     }
 
@@ -47,25 +48,25 @@ contract ChainWillFactoryTest is Test {
 
     // ── negative ───────────────────────────────────────────
     function test_revert_invalidToken() public {
-        address[] memory signers = new address[](1);
-        signers[0] = signer1;
+    address[] memory signers = new address[](1);
+    signers[0] = signer1;
 
-        vm.expectRevert("Invalid token");
-        factory.createWill(address(0), signers, 365 days);
-    }
+    vm.expectRevert("Invalid token address"); // ✅ matches contract
+    factory.createWill(address(0), signers, 365 days);
+}
 
-    function test_revert_noSigners() public {
-        address[] memory signers = new address[](0);
+function test_revert_noSigners() public {
+    address[] memory signers = new address[](0);
 
-        vm.expectRevert("No signers");
-        factory.createWill(address(token), signers, 365 days);
-    }
+    vm.expectRevert("At least one signer required"); // ✅ matches contract
+    factory.createWill(address(token), signers, 365 days);
+}
 
-    function test_revert_invalidPeriod() public {
-        address[] memory signers = new address[](1);
-        signers[0] = signer1;
+function test_revert_invalidPeriod() public {
+    address[] memory signers = new address[](1);
+    signers[0] = signer1;
 
-        vm.expectRevert("Invalid period");
-        factory.createWill(address(token), signers, 0);
-    }
+    vm.expectRevert("Inactivity period must be > 0"); // ✅ matches contract
+    factory.createWill(address(token), signers, 0);
+}
 }

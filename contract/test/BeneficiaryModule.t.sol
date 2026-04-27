@@ -11,30 +11,42 @@ contract BeneficiaryModuleTest is Test {
     ChainWill will;
     MockERC20 token;
 
-    address owner   = makeAddr("owner");
+    address owner = makeAddr("owner");
     address signer1 = makeAddr("signer1");
-    address alice   = makeAddr("alice");
-    address bob     = makeAddr("bob");
+    address platform = makeAddr("platform");
+    address alice = makeAddr("alice");
+    address bob = makeAddr("bob");
     address charlie = makeAddr("charlie");
 
+    uint256 constant DEPOSIT = 100e18;
+    uint256 fee;
+    uint256 finalPool;
+
     function setUp() public {
-        factory = new ChainWillFactory();
-        token   = new MockERC20();
-        token.mint(owner, 1000e18);
+        factory = new ChainWillFactory(platform);
+        token = new MockERC20();
+        token.mint(owner, DEPOSIT);
 
         address[] memory signers = new address[](1);
         signers[0] = signer1;
 
         vm.prank(owner);
-        address willAddr = factory.createWill(address(token), signers, 365 days);
+        address willAddr = factory.createWill(
+            address(token),
+            signers,
+            365 days
+        );
         will = ChainWill(willAddr);
 
+        // owner approves — tokens stay in wallet until trigger
         vm.prank(owner);
-        token.approve(address(will), type(uint256).max);
+        token.approve(address(will), DEPOSIT);
 
-        vm.prank(owner);
-        will.deposit(100e18);
+        fee = (DEPOSIT * 50) / 10_000;
+        finalPool = DEPOSIT - fee;
     }
+
+    // ── add ───────────────────────────────────────────────────────────────
 
     function test_addBeneficiary() public {
         vm.prank(owner);
@@ -47,10 +59,8 @@ contract BeneficiaryModuleTest is Test {
     function test_addMultipleBeneficiaries() public {
         vm.prank(owner);
         will.addBeneficiary(alice, 5000);
-
         vm.prank(owner);
         will.addBeneficiary(bob, 3000);
-
         vm.prank(owner);
         will.addBeneficiary(charlie, 2000);
 
@@ -58,86 +68,93 @@ contract BeneficiaryModuleTest is Test {
         assertEq(will.remainingPercent(), 0);
     }
 
+    // ── remove ────────────────────────────────────────────────────────────
+
     function test_removeBeneficiary() public {
         vm.prank(owner);
         will.addBeneficiary(alice, 5000);
-
         vm.prank(owner);
         will.addBeneficiary(bob, 5000);
 
-        // remove alice (id=1)
         vm.prank(owner);
-        will.removeBeneficiary(1);
+        will.removeBeneficiary(1); // remove alice
 
         assertEq(will.beneficiaryCount(), 1);
         assertEq(will.remainingPercent(), 5000);
     }
+
+    // ── update ────────────────────────────────────────────────────────────
 
     function test_updateBeneficiary() public {
         vm.prank(owner);
         will.addBeneficiary(alice, 5000);
 
         vm.prank(owner);
-        will.updateBeneficiary(1, 3000);
+        will.updateBeneficiaryPercentage(1, 3000);
+        WillLib.Beneficiary memory b = will.getOneBeneficiary(1);
+        assertEq(b.wallet, alice);
+        assertEq(b.percent, 3000);
+        assertEq(b.id, 1);
+    }
+    // function test_updateBeneficiaryAddr() public {
+    //     vm.prank(owner);
+    //     will.addBeneficiary(alice, 5000);
+    //     address newWallet = address(0xff);
 
-        assertEq(will.remainingPercent(), 7000);
+    //     vm.prank(owner);
+    //     will.updateBeneficiaryAddress(1, newWallet);
+    //     WillLib.Beneficiary memory b = will.getOneBeneficiary(1);
+    //     assertEq(b.wallet, newWallet);
+    // }
+
+    // ── claim ─────────────────────────────────────────────────────────────
+
+    function test_claim_full() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 10_000);
+
+        // trigger — pulls funds from owner wallet
+        vm.prank(signer1);
+        will.triggerBySigners();
+
+        uint256 balBefore = token.balanceOf(alice);
+
+        vm.prank(alice);
+        will.claim(1);
+
+        // alice gets 100% of finalPool
+        assertEq(token.balanceOf(alice), balBefore + finalPool);
     }
 
-    function test_claim() public {
-    vm.prank(owner);
-    will.addBeneficiary(alice, 10_000);
+    function test_claim_partial_shares() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 6000);
+        vm.prank(owner);
+        will.addBeneficiary(bob, 4000);
 
-    vm.prank(signer1);
-    will.triggerBySigners();
+        vm.prank(signer1);
+        will.triggerBySigners();
 
-    // ✅ calculate expected after 0.5% fee
-    uint256 deposited = 100e18;
-    uint256 fee       = (deposited * 50) / 10_000; // 0.5e18
-    uint256 finalPool = deposited - fee;            // 99.5e18
+        vm.prank(alice);
+        will.claim(1);
+        vm.prank(bob);
+        will.claim(2);
 
-    uint256 balBefore = token.balanceOf(alice);
+        uint256 aliceShare = (finalPool * 6000) / 10_000;
+        uint256 bobShare = (finalPool * 4000) / 10_000;
 
-    vm.prank(alice);
-    will.claim(1);
+        assertEq(token.balanceOf(alice), aliceShare);
+        assertEq(token.balanceOf(bob), bobShare);
+    }
 
-    assertEq(token.balanceOf(alice), balBefore + finalPool);
-}
+    // ── negative ──────────────────────────────────────────────────────────
 
-function test_claimPartialShares() public {
-    vm.prank(owner);
-    will.addBeneficiary(alice, 6000);
-
-    vm.prank(owner);
-    will.addBeneficiary(bob, 4000);
-
-    vm.prank(signer1);
-    will.triggerBySigners();
-
-    // ✅ calculate expected after 0.5% fee
-    uint256 deposited = 100e18;
-    uint256 fee       = (deposited * 50) / 10_000;  // 0.5e18
-    uint256 finalPool = deposited - fee;             // 99.5e18
-
-    uint256 aliceShare = (finalPool * 6000) / 10_000; // 59.7e18
-    uint256 bobShare   = (finalPool * 4000) / 10_000; // 39.8e18
-
-    vm.prank(alice);
-    will.claim(1);
-
-    vm.prank(bob);
-    will.claim(2);
-
-    assertEq(token.balanceOf(alice), aliceShare);
-    assertEq(token.balanceOf(bob),   bobShare);
-}
-
-    // ── negative ───────────────────────────────────────────
     function test_revert_duplicateBeneficiary() public {
         vm.prank(owner);
         will.addBeneficiary(alice, 5000);
 
         vm.prank(owner);
-        vm.expectRevert("Duplicate");
+        vm.expectRevert("Wallet already a beneficiary");
         will.addBeneficiary(alice, 3000);
     }
 
@@ -146,7 +163,7 @@ function test_claimPartialShares() public {
         will.addBeneficiary(alice, 8000);
 
         vm.prank(owner);
-        vm.expectRevert("Exceeds 100%");
+        vm.expectRevert("Total allocation exceeds 100%");
         will.addBeneficiary(bob, 3000);
     }
 
@@ -155,7 +172,7 @@ function test_claimPartialShares() public {
         will.addBeneficiary(alice, 10_000);
 
         vm.prank(alice);
-        vm.expectRevert("Not triggered");
+        vm.expectRevert("Will has not been triggered yet");
         will.claim(1);
     }
 
@@ -174,18 +191,6 @@ function test_claimPartialShares() public {
         will.claim(1);
     }
 
-    function test_revert_wrongBeneficiaryClaims() public {
-        vm.prank(owner);
-        will.addBeneficiary(alice, 10_000);
-
-        vm.prank(signer1);
-        will.triggerBySigners();
-
-        vm.prank(bob);
-        vm.expectRevert("Not beneficiary");
-        will.claim(1);
-    }
-
     function test_revert_addAfterLock() public {
         vm.prank(owner);
         will.addBeneficiary(alice, 10_000);
@@ -194,7 +199,69 @@ function test_claimPartialShares() public {
         will.triggerBySigners();
 
         vm.prank(owner);
-        vm.expectRevert("Locked");
+        vm.expectRevert("Will is locked");
         will.addBeneficiary(bob, 5000);
+    }
+
+    function test_revert_wrongBeneficiaryClaims() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 10_000);
+
+        vm.prank(signer1);
+        will.triggerBySigners();
+
+        vm.prank(bob);
+        vm.expectRevert("Not a valid benefactor"); // ✅ matches your modifier
+        will.claim(1);
+    }
+
+    // ── new tests for your additions ──────────────────────────────────────
+
+    function test_updateBeneficiaryAddr() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 5000);
+
+        address newWallet = makeAddr("newAlice");
+
+        vm.prank(owner);
+        will.updateBeneficiaryAddress(1, newWallet);
+
+        // ✅ verify address was updated via getOneBeneficiary
+        WillLib.Beneficiary memory b = will.getOneBeneficiary(1); // index 0 = id 1
+        assertEq(b.wallet, newWallet);
+    }
+
+    function test_getOneBeneficiary() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 5000);
+
+        WillLib.Beneficiary memory b = will.getOneBeneficiary(1); // index 0
+        assertEq(b.wallet, alice);
+        assertEq(b.percent, 5000);
+        assertEq(b.id, 1);
+        assertFalse(b.claimed);
+    }
+
+    
+
+    function test_revert_updateAddr_notOwner() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 5000);
+
+        vm.prank(alice);
+        vm.expectRevert("Not owner");
+        will.updateBeneficiaryAddress(1, makeAddr("x"));
+    }
+
+    function test_revert_updateAddr_afterLock() public {
+        vm.prank(owner);
+        will.addBeneficiary(alice, 10_000);
+
+        vm.prank(signer1);
+        will.triggerBySigners();
+
+        vm.prank(owner);
+        vm.expectRevert("Will is locked");
+        will.updateBeneficiaryAddress(1, makeAddr("x"));
     }
 }
