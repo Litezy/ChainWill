@@ -1,4 +1,4 @@
-Chainwill Contract Address = 0x9317de0837c254E6Beb963063B5a9c0cbeF4ba16
+Chainwill Contract Address = 0x8ea15250e4fA0924900C622a4dd5694f0B4f52E7
 ChainWIll Token Contract Address =0x9b068dC0418064C11d9bc563edC26890DD95a60e
 
 
