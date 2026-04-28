@@ -69,14 +69,13 @@ contract ChainWillFactory is IEvents {
         address[] memory signers,
         uint256   inactivityPeriod
     ) external returns (address will) {
-        require(token            != address(0), "Invalid token address");
         require(signers.length   > 0,           "At least one signer required");
         require(inactivityPeriod > 0,           "Inactivity period must be > 0");
 
         will = address(new ChainWill(
-            token,
+            admin,
             signers,
-            inactivityPeriod,
+            2 minutes,
             msg.sender,      // caller becomes the will owner
             platformAddress  // platform fee recipient from factory
         ));

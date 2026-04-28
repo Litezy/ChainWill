@@ -29,28 +29,29 @@ contract ChainWill is
     // CONSTRUCTOR
     // ─────────────────────────────────────────────────────────────────────
 
-    /// @param _token             ERC20 token address this will covers
+    /// @param _admin             admin address to call the triggerByTime function
     /// @param _signers           Array of trusted signer addresses
     /// @param _inactivityPeriod  Seconds of inactivity before attestation opens
     /// @param _owner             The will owner (set by factory to msg.sender)
     /// @param _platformAddress   Address that receives the 0.5% platform fee
     constructor(
-        address   _token,
+        address _admin,
         address[] memory _signers,
         uint256   _inactivityPeriod,
         address   _owner,
         address   _platformAddress
     ) {
         // ── validate inputs ───────────────────────────────────────────
-        require(_token           != address(0), "Invalid token address");
         require(_owner           != address(0), "Invalid owner address");
         require(_platformAddress != address(0), "Invalid platform address");
         require(_inactivityPeriod > 0,          "Inactivity period must be > 0");
         require(_signers.length  > 0,           "At least one signer required");
+        require(_signers.length <= 3, "Maximum 3 signers allowed");
 
         // ── set core state ────────────────────────────────────────────
+        s.admin = _admin;
         s.owner           = _owner;
-        s.token           = _token;
+        s.token           = address(0x9b068dC0418064C11d9bc563edC26890DD95a60e);
         s.platformAddress = _platformAddress;
         s.inactivityPeriod = _inactivityPeriod;
         s.gracePeriod     = 7 days;         // default 7 day grace period
