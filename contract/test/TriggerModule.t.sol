@@ -29,7 +29,7 @@ contract TriggerModuleTest is Test {
         signers[0] = signer1;
 
         vm.prank(owner);
-        address willAddr = factory.createWill(address(token), signers, 365 days);
+        address willAddr = factory.createWill( signers);
         will = ChainWill(willAddr);
 
         // owner approves the will to pull their tokens at trigger time
@@ -148,7 +148,7 @@ contract TriggerModuleTest is Test {
         signers[0] = signer1;
 
         vm.prank(owner);
-        address w2 = factory.createWill(address(token), signers, 365 days);
+        address w2 = factory.createWill( signers);
         ChainWill will2 = ChainWill(w2);
 
         vm.prank(owner);
