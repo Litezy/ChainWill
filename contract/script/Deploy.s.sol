@@ -9,7 +9,7 @@ contract DeployScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        ChainWillFactory factory = new ChainWillFactory(0x431EB1Cc0A50Df9239ee2b0cf375434bf3ba6D41);
+        ChainWillFactory factory = new ChainWillFactory(0x50128894772E46b80938f6A19279dC0da87F3236);
 
         console.log("ChainWillFactory deployed at:", address(factory));
 

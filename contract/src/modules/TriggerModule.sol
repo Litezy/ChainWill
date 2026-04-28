@@ -17,22 +17,20 @@ abstract contract TriggerModule is WillBase, IEvents {
     // TIME-BASED TRIGGER
     // ─────────────────────────────────────────────────────────────────────
 
-    /// @notice Any signer can call this once the inactivity + grace period
+    /// @notice Admin can call this once the inactivity + grace period
     ///         has passed without the owner checking in.
     ///         Pulls approved funds from owner's wallet and locks the will.
-    function triggerByTime() external {
-        require(s.isSigner[msg.sender], "Not a signer");
+    function triggerByTime() external onlyAdmin {
         require(!s.triggered,           "Will already triggered");
         require(s.isReadyToTrigger(),   "Too early as inactivity period not elapsed");
         require(s.beneficiaries.length > 0, "No beneficiaries set");
 
-        _trigger();
+        s.attestationOpen = true;
 
         emit InactivityTriggered(
             msg.sender,
-            s.triggeredAt,
-            s.attestationStartAt(),
-            s.claimTriggerAt()
+            block.timestamp,
+            s.attestationStartAt()
         );
     }
 

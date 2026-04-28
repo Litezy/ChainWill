@@ -41,6 +41,7 @@ library WillLib {
         // ── PLATFORM FEE ──────────────────────────
         uint256 PLATFORM_FEE_BP;        // fee in basis points (50 = 0.5%)
         address platformAddress;        // address that receives the fee
+        address admin;          // address of admin to perform some functions
 
         // ── REENTRANCY GUARD ──────────────────────
         bool lockedReentrancy;          // prevents reentrancy on claim
@@ -49,6 +50,7 @@ library WillLib {
         address[] signers;                          // list of signer addresses
         mapping(address => bool) isSigner;          // is this address a signer?
         mapping(address => bool) hasSigned;         // has this signer attested?
+        bool attestationOpen;                // window to check if signers can start signing
         uint256 signatureCount;                     // how many signers have attested
         uint256 requiredSignatures;                 // how many needed to trigger
 

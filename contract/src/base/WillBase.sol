@@ -11,4 +11,9 @@ abstract contract WillBase {
         require(msg.sender == s.owner, "Not owner");
         _;
     }
+
+    modifier onlyAdmin() {
+        require(msg.sender == s.admin, "Not Admin");
+        _;
+    }
 }

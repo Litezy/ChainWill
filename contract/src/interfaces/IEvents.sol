@@ -19,8 +19,7 @@ interface IEvents {
     event InactivityTriggered(
         address indexed triggeredBy,
         uint256 triggeredAt,
-        uint256 attestationStart,
-        uint256 claimTrigger
+        uint256 attestationStart
     );
 
     // ── CONFIG ────────────────────────────────────────────────────────────

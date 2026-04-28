@@ -19,6 +19,7 @@ abstract contract SignerModule is WillBase, IEvents {
         require(s.isSigner[msg.sender],    "Not a registered signer");
         require(!s.triggered,              "Will already triggered");
         require(!s.hasSigned[msg.sender],  "You have already attested");
+        require(s.attestationOpen,          "Attestation not open yet"); // 
         require(s.beneficiaries.length > 0, "No beneficiaries set");
 
         // record this signer's attestation
@@ -101,11 +102,14 @@ abstract contract SignerModule is WillBase, IEvents {
 
     /// @notice Returns current attestation count vs required.
     function getAttestationStatus() external view returns (
+        bool _available,
         uint256 count,
         uint256 required
     ) {
-        return (s.signatureCount, s.requiredSignatures);
+        return (s.attestationOpen, s.signatureCount, s.requiredSignatures);
     }
+
+    
 
     // ─────────────────────────────────────────────────────────────────────
     // INTERNAL — implemented by TriggerModule, resolved in ChainWill
