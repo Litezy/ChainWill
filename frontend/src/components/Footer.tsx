@@ -1,9 +1,33 @@
+"use client";
+import Image from "next/image";
+import styles from "../app/page.module.css";
+import { usePathname } from "next/navigation";
 import Icon from "@/components/Icon";
 
 const footerLinks = ["Privacy Policy", "Terms & Conditions"];
 
 export default function Footer() {
+  const pathname = usePathname();
+  const isDashboard = pathname.startsWith("/Dashboard");
+
   return (
+    !isDashboard && (
+    <div className={styles.footerContainer}>
+      <section>
+        <h5 className={styles.logo}>ChainWill</h5>
+        <p className={styles.secure}>
+          &copy; {Date.now()} ChainWill. Secured by Smart Contracts.
+        </p>
+      </section>
+
+      <section className={styles.policyContainer}>
+        <a href="">
+          <p>Privacy Policy</p>
+        </a>
+        <a href="">
+          <p>Terms and condition</p>
+        </a>
+      </section>
     <footer className="border-t border-slate-200 bg-slate-50">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between px-10 py-8 md:flex-row">
         <div className="mb-6 md:mb-0">
@@ -35,6 +59,9 @@ export default function Footer() {
             </div>
           ))}
         </div>
+      </section>
+    </div>
+    )
       </div>
     </footer>
   );

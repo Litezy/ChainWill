@@ -1,3 +1,15 @@
+"use client"
+import Image from "next/image";
+import styles from "../app/page.module.css";
+import { usePathname } from "next/navigation";
+
+export default function Header() {
+    const pathname = usePathname();
+    const isDashboard = pathname.startsWith("/Dashboard");
+  return (
+      !isDashboard && (
+    <div className={styles.homeContainer}>
+      <h5 className={styles.logo}><a href="/"> ChainWill</a></h5>
 "use client";
 
 import Link from "next/link";
@@ -42,6 +54,9 @@ export default function Header() {
           })}
         </div>
 
+      <button type="button" className={styles.connectWallet}>Connect Wallet</button>
+    </div>
+      )
         <div className="flex items-center gap-4">
           <button
             className="rounded-lg bg-primary px-6 py-2.5 text-label-bold font-label-bold text-on-primary transition-all hover:opacity-90 active:scale-95"
