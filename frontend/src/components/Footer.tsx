@@ -1,8 +1,14 @@
+"use client";
 import Image from "next/image";
 import styles from "../app/page.module.css";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname();
+  const isDashboard = pathname.startsWith("/Dashboard");
+
   return (
+    !isDashboard && (
     <div className={styles.footerContainer}>
       <section>
         <h5 className={styles.logo}>ChainWill</h5>
@@ -42,5 +48,6 @@ export default function Footer() {
         </div>
       </section>
     </div>
+    )
   );
 }
