@@ -1,5 +1,5 @@
 ═══════════════════════════════════════════════════════════════
-CHAINWILL — BACKEND INTEGRATION GUIDE  [v2 — contract-verified]
+CHAINWILL — BACKEND INTEGRATION GUIDE  [v3 — MATCHES DEPLOYED CONTRACT]
 ═══════════════════════════════════════════════════════════════
 
 OVERVIEW
@@ -8,29 +8,30 @@ ChainWill is a modular on-chain digital will system deployed via
 a factory contract. Users create wills, approve the will contract
 to spend their ERC20 tokens (tokens NEVER leave their wallet until
 trigger), assign beneficiaries with percentage shares, and assign
-trusted signers. The will auto-executes when inactivity is detected
-or signers attest.
+trusted signers.
 
 ⚠️  CRITICAL ARCHITECTURE NOTE — READ FIRST:
-    Tokens are NEVER deposited into the will contract.
-    The owner calls token.approve(willAddress, amount) on the token
-    contract. Tokens stay in the owner's wallet until trigger fires.
-    At trigger time, the will pulls the approved amount via transferFrom.
-    There is NO deposit() or withdraw() function on ChainWill.
+    1. Tokens are NEVER deposited into the will contract.
+    2. The token (CWT) and Inactivity Period (2 mins) are HARDCODED in the contract.
+    3. The time-trigger (`triggerByTime()`) is restricted to `onlyAdmin`.
+       The backend MUST act as a Relayer, holding the Admin private key,
+       to automatically call this function when the 2-minute timer expires.
 
 The backend is responsible for:
 - Indexing contract events
+- Running the Admin Relayer (Cron Job) to open attestation windows
 - Exposing REST/GraphQL APIs to the frontend
 - Managing off-chain metadata (optional)
-- Handling notifications (email/push) for check-in reminders
+- Handling notifications (email/push)
 
 ═══════════════════════════════════════════════════════════════
 CONTRACT ADDRESSES (update when deployed)
 ═══════════════════════════════════════════════════════════════
 
 ChainWillFactory: 0x721Ff9CD2DECFD110e8099Da4fFf2d16ac273F7B
+Token (CWT):      0x9b068dC0418064C11d9bc563edC26890DD95a60e
 Network:          Sepolia Testnet (chain ID 11155111)
-RPC URL:          https://rpc.sepolia.org  (or your own node)
+RPC URL:          https://rpc.sepolia.org
 
 ═══════════════════════════════════════════════════════════════
 FACTORY CONTRACT — ChainWillFactory.sol
@@ -48,8 +49,8 @@ isWill[address]                   → bool quick-lookup
 
 FUNCTIONS TO CALL:
 ──────────────────
-createWill(address token, address[] signers, uint256 inactivityPeriod)
-  → deploys a new ChainWill for msg.sender
+createWill(address[] signers)
+  → deploys a new ChainWill (Token and 2-min period are hardcoded internally)
   → emits WillCreated(address will, address owner, address token)
 
 getWillsByOwner(address owner) → address[]
@@ -64,8 +65,6 @@ ADMIN FUNCTIONS (factory level):
 ─────────────────────────────────
 setPlatformAddress(address newAddress) — only callable by admin
   → emits PlatformAddressUpdated(address old, address new)
-  → only affects NEW wills — existing wills keep their original platform address
-
 
 ═══════════════════════════════════════════════════════════════
 CHAINWILL CONTRACT — per deployed instance
@@ -77,53 +76,21 @@ are called on the individual will contract address.
 ────────────────────────────────────────
 ONBOARDING FLOW (correct order)
 ────────────────────────────────────────
-1. User calls factory.createWill(token, signers, inactivityPeriod)
-   → will contract is deployed
-2. User calls token.approve(willAddress, desiredAmount)
-   → tokens stay in user's wallet; will just has spending permission
+1. User calls factory.createWill(signers)
+2. User calls CWT.approve(willAddress, desiredAmount)
 3. User adds beneficiaries and configures signers
-4. User checks in regularly (checkIn()) to reset inactivity clock
-5. If owner stops checking in:
-   → signers can attest via triggerBySigners()
-   → OR time-based trigger fires via triggerByTime()
-6. At trigger: contract pulls approved tokens from owner's wallet
-   → 0.5% fee deducted → sent to platformAddress
-   → finalPool = pulled amount - fee
-7. Beneficiaries call claim(beneficiaryId) to receive their share
+4. User checks in regularly (checkIn()) to reset the 2-min clock
 
 ────────────────────────────────────────
 FUNDING — KEY READS (NO deposit/withdraw)
 ────────────────────────────────────────
 getApprovedAmount() → uint256
-  - how much owner has approved this contract to pull
-  - this is the "committed" amount visible to beneficiaries
-  - owner can call token.approve() at any time to increase/decrease
-
 getOwnerBalance() → uint256
-  - owner's actual token balance in their wallet
-
 getEffectivePullAmount() → uint256
-  - min(approvedAmount, ownerBalance)
-  - THIS is what will actually be pulled at trigger
-  - use this for projections in the UI / DB
-
-getWillStatus() → (
-    approvedAmount,
-    ownerWalletBalance,
-    effectivePullAmount,
-    timeRemaining,
-    attestationOpensAt,
-    triggerUnlocksAt,
-    triggered,
-    locked,
-    finalPool
-  )
-  - single call for dashboard — index this frequently
+getWillStatus() → Returns full status tuple
 
 BACKEND RESPONSIBILITY:
-  - Track owner's approved amount changes by watching ERC20 Approval events
-    for (owner → willAddress) pairs
-  - There is NO Deposited or Withdrawn event — the old guide was wrong
+  - Track owner's approved amount changes by watching CWT Approval events
   - At trigger: watch for WillLocked event which contains finalPool and fee
 
 ────────────────────────────────────────
@@ -134,196 +101,89 @@ checkIn()
   - resets s.lastCheckIn to block.timestamp
   - emits: CheckIn(address indexed owner, uint256 timestamp)
 
-⚠️  s.lastCheckIn is set to block.timestamp at will CREATION (constructor).
-    So the inactivity clock starts from deployment, not from first check-in.
-
 BACKEND RESPONSIBILITY:
   - Track lastCheckIn timestamp from CheckIn events
   - Store in DB: wills.lastCheckIn
-  - Calculate deadlines:
-      attestationOpensAt  = lastCheckIn + inactivityPeriod
-      triggerUnlocksAt    = attestationOpensAt + gracePeriod
-  - Grace period default: 7 days (604800 seconds), owner can change it
-  - Cron job daily:
-      if (now > lastCheckIn + inactivityPeriod * 0.8) → send check-in reminder to owner
-      if (now > lastCheckIn + inactivityPeriod) → alert signers: attestation window open
-      if (now > triggerUnlocksAt) → alert signers: time-trigger available
 
 ────────────────────────────────────────
 BENEFICIARIES
 ────────────────────────────────────────
 addBeneficiary(address wallet, uint256 percent)
-  - percent in basis points (10000 = 100%, 5000 = 50%, 500 = 5%)
-  - IDs start at 1 and increment — never reset or reused
-  - emits: BeneficiaryAdded(uint256 indexed id, address indexed wallet, uint256 percent)
-
 removeBeneficiary(uint256 id)
-  - uses stable ID, NOT array index
-  - uses swap-and-pop internally — array positions change on removal
-  - emits: BeneficiaryRemoved(uint256 indexed id, address indexed wallet)
-
 updateBeneficiaryPercentage(uint256 id, uint256 newPercent)
-  ⚠️  FUNCTION NAME CHANGED from old guide — was updateBeneficiary()
-  - emits: BeneficiaryUpdated(uint256 indexed id, address indexed wallet, uint256 oldPercent, uint256 newPercent)
-
 updateBeneficiaryAddress(uint256 id, address newWallet)
-  ⚠️  NEW FUNCTION — not in old guide
-  - owner can update a beneficiary's wallet address
-  - emits: BeneficiaryAddressUpdated(uint256 indexed id, address oldWallet, address newWallet)
 
 getBeneficiaries() → Beneficiary[]
-  struct Beneficiary {
-    uint256 id;           ← stable, never changes
-    address wallet;
-    uint256 percent;      ← basis points
-    bool    claimed;
-    uint256 claimedAt;
-  }
-
 getOneBeneficiary(uint256 id) → Beneficiary
-  ⚠️  NEW VIEW — not in old guide — useful for single lookup
-
 beneficiaryCount() → uint256
-remainingPercent() → uint256   (basis points still unallocated)
-
-BACKEND NOTES:
-  - Beneficiary IDs start at 1, increment for every add, never reset
-  - Array positions shift on removal (swap-and-pop) — NEVER store array index
-  - Always store and reference by .id field
-  - isBenefactor[id][wallet] is checked on claim — wallet must match exactly
+remainingPercent() → uint256
 
 ────────────────────────────────────────
 SIGNERS
 ────────────────────────────────────────
 Signer threshold logic (from constructor):
   1 signer  → requiredSignatures = 1
-  2+ signers → requiredSignatures = 2  (always 2, regardless of total count)
+  2+ signers → requiredSignatures = 2  (always 2)
 
 triggerBySigners()
   - called by a signer to attest death
-  - records hasSigned[signer] = true, increments signatureCount
-  - if signatureCount >= requiredSignatures → _trigger() fires automatically
-  - emits: SignerAttested(address indexed signer, uint256 count, uint256 required)
+  - if threshold met → _trigger() fires automatically and pulls funds
 
 revokeAttestation()
-  - signer withdraws their attestation
-  - cannot revoke after will is already triggered
-  - emits: AttestationRevoked(address indexed signer, uint256 count)
-
 replaceSigner(address oldSigner, address newSigner)
-  - owner only
-  - if old signer had already signed, their vote is removed (count decremented)
-  - emits: SignerReplaced(address indexed oldSigner, address indexed newSigner)
 
 getSigners() → address[]
-getAttestationStatus() → (uint256 count, uint256 required)
-  ⚠️  NEW VIEW — not in old guide
+getAttestationStatus() → (bool _available, uint256 count, uint256 required)
+  ⚠️  NEW VIEW RETURN: Backend must account for the _available boolean.
 
 ────────────────────────────────────────
 TRIGGER
 ────────────────────────────────────────
-Two paths to trigger:
-
-1. BY TIME — signer calls after inactivity + grace period elapsed:
+The new 2-step flow:
+1. BY TIME (Admin Backend calls after 2 mins elapsed):
    triggerByTime()
-   - restricted to signers only
-   - checks: isReadyToTrigger() = (block.timestamp >= claimTriggerAt())
-   - claimTriggerAt = lastCheckIn + inactivityPeriod + gracePeriod
-   - emits: InactivityTriggered(
-       address indexed triggeredBy,
-       uint256 triggeredAt,
-       uint256 attestationStart,
-       uint256 claimTrigger
-     )
+   - Restricted to `onlyAdmin`
+   - Sets s.attestationOpen = true (Does NOT pull funds yet)
+   - Emits: InactivityTriggered
 
-2. BY SIGNERS — multisig attestation threshold met:
-   triggerBySigners() — see Signers section above
-   (trigger fires inside this call automatically when threshold met)
-
-WHAT HAPPENS AT TRIGGER (_trigger internal):
-  1. s.triggered = true, s.locked = true, s.triggeredAt = block.timestamp
-  2. Calculates amountToPull = min(allowance, ownerBalance)
-     → reverts if allowance == 0 OR ownerBalance == 0
-  3. Calls IERC20.transferFrom(owner, willContract, amountToPull)
-  4. Calculates fee = (amountToPull * 50) / 10000  → 0.5%
-  5. Transfers fee to platformAddress
-  6. s.finalPool = amountToPull - fee
-  7. emits: WillLocked(uint256 timestamp, uint256 finalPool, uint256 fee)
-     ⚠️  WillLocked NOW has 3 params — old guide only showed 1 (timestamp)
-
-IMPORTANT:
-  - If owner has revoked approval or drained wallet before trigger,
-    triggerByTime()/triggerBySigners() will REVERT
-  - Backend should monitor owner wallet balance and approval amount
-    and alert if either drops to zero (will is at risk of not executing)
-
-timeUntilTrigger() → uint256   (0 if past deadline)
-isTriggered() → bool
-isLocked() → bool
-getFinalPool() → uint256       (0 before trigger)
-attestationStartAt() → uint256
-claimTriggerAt() → uint256
+2. BY SIGNERS (multisig attestation threshold met):
+   triggerBySigners()
+   - Pulls funds, deducts fee, sets finalPool, locks will.
+   - Emits: WillLocked
 
 ────────────────────────────────────────
 CLAIMING
 ────────────────────────────────────────
 claim(uint256 beneficiaryId)
-  ⚠️  Caller must be the wallet registered for that beneficiary ID
-      The contract checks isBenefactor[id][msg.sender] — it will revert
-      if called from any other wallet, even if it "knows" the ID
   - share = (finalPool * percent) / 10000
-  - Has reentrancy guard (lockedReentrancy flag)
-  - emits: BeneficiaryClaimed(uint256 indexed id, address indexed wallet, uint256 amount)
 
 ────────────────────────────────────────
 WALLET RECOVERY
 ────────────────────────────────────────
 requestWalletChange(address newWallet)
-  - called by current owner
-  - sets pendingRecoveryWallet — does NOT transfer ownership yet
-  - emits: RecoveryRequested(address indexed newWallet)
-
 confirmWalletChange()
-  - called by the NEW wallet (not the old owner)
-  - transfers ownership: s.owner = pendingRecoveryWallet
-  - clears pendingRecoveryWallet to address(0)
-  - emits: WalletRecovered(address indexed oldOwner, address indexed newOwner)
-
-getPendingRecoveryWallet() → address   (returns address(0) if no pending)
-
-BACKEND:
-  - Watch RecoveryRequested → flag will as "recovery pending" in DB
-  - On WalletRecovered → update wills.ownerAddress in DB
-  - Notify new wallet to confirm, notify old wallet that change occurred
+getPendingRecoveryWallet() → address
 
 ────────────────────────────────────────
 CONFIG
 ────────────────────────────────────────
-setGracePeriod(uint256 seconds)        → owner only, will must not be locked
-  - emits: GracePeriodUpdated(uint256 old, uint256 new)
-  - default at creation: 7 days (604800)
-
-setInactivityPeriod(uint256 seconds)   → owner only, will must not be locked
-  - emits: InactivityPeriodUpdated(uint256 old, uint256 new)
-
-GENERAL VIEWS:
-  getOwner() → address
-  getToken() → address
-  getPlatformAddress() → address
-  getPlatformFeeBP() → uint256   (returns 50 = 0.5%)
+setGracePeriod(uint256 seconds)
+setInactivityPeriod(uint256 seconds)
+getOwner() → address
+getToken() → address
+getPlatformAddress() → address
+getPlatformFeeBP() → uint256   (returns 50 = 0.5%)
 
 ═══════════════════════════════════════════════════════════════
 PLATFORM FEE
 ═══════════════════════════════════════════════════════════════
-- Fee: 0.5% (50 basis points), fixed in constructor, not changeable
+- Fee: 0.5% (50 basis points)
 - Deducted from pulled amount at trigger time
-- Sent to platformAddress (set per-will at creation from factory)
+- Sent to platformAddress set at deployment
 - finalPool = amountPulled - fee
-- Beneficiary shares calculated from finalPool
-- Formula: fee = (amountPulled * 50) / 10000
 
 ═══════════════════════════════════════════════════════════════
-ALL EVENTS TO INDEX  [corrected & complete]
+ALL EVENTS TO INDEX[corrected & complete for v3]
 ═══════════════════════════════════════════════════════════════
 
 FACTORY:
@@ -333,8 +193,8 @@ event PlatformAddressUpdated(address oldAddress, address newAddress)
 CHAINWILL (per will instance):
 event CheckIn(address indexed owner, uint256 timestamp)
 event WillLocked(uint256 timestamp, uint256 finalPool, uint256 fee)
-  ⚠️  3 params — old guide had 1
-event InactivityTriggered(address indexed triggeredBy, uint256 triggeredAt, uint256 attestationStart, uint256 claimTrigger)
+event InactivityTriggered(address indexed triggeredBy, uint256 triggeredAt, uint256 attestationStart)
+  ⚠️ Parameter `claimTrigger` was removed by SC Dev.
 event GracePeriodUpdated(uint256 oldPeriod, uint256 newPeriod)
 event InactivityPeriodUpdated(uint256 oldPeriod, uint256 newPeriod)
 event SignerAttested(address indexed signer, uint256 count, uint256 required)
@@ -342,56 +202,40 @@ event AttestationRevoked(address indexed signer, uint256 count)
 event SignerReplaced(address indexed oldSigner, address indexed newSigner)
 event BeneficiaryAdded(uint256 indexed id, address indexed wallet, uint256 percent)
 event BeneficiaryUpdated(uint256 indexed id, address indexed wallet, uint256 oldPercent, uint256 newPercent)
+event BeneficiaryAddressUpdated(uint256 indexed id, address indexed oldWallet, address indexed newWallet)
+  ⚠️ Parameter `oldWallet` is now indexed.
 event BeneficiaryRemoved(uint256 indexed id, address indexed wallet)
-event BeneficiaryAddressUpdated(uint256 indexed id, address oldWallet, address newWallet)
-  ⚠️  NEW EVENT — not in old guide
 event BeneficiaryClaimed(uint256 indexed id, address indexed wallet, uint256 amount)
 event RecoveryRequested(address indexed newWallet)
 event WalletRecovered(address indexed oldOwner, address indexed newOwner)
 
-REMOVED EVENTS (were in old guide, do NOT exist in contract):
-  ✗ Deposited(address owner, uint256 amount)    ← NO deposit function
-  ✗ Withdrawn(address owner, uint256 amount)    ← NO withdraw function
-
-ERC20 EVENTS TO WATCH (on the token contract, not the will):
-  Approval(owner, willAddress, amount)   → track approved amount changes
-  Transfer(owner, willAddress, amount)   → emitted at trigger (transferFrom)
+ERC20 EVENTS TO WATCH (on CWT token):
+Approval(owner, willAddress, amount)
+Transfer(owner, willAddress, amount)
 
 ═══════════════════════════════════════════════════════════════
-SUGGESTED DATABASE SCHEMA  [corrected]
+SUGGESTED DATABASE SCHEMA
 ═══════════════════════════════════════════════════════════════
 
 wills
   id, contractAddress, ownerAddress, tokenAddress,
-  approvedAmount,          ← updated from ERC20 Approval events (NOT deposited)
-  effectivePullAmount,     ← min(approvedAmount, ownerWalletBalance), recalculated regularly
-  finalPool,               ← set from WillLocked event (after trigger)
-  feePaid,                 ← set from WillLocked event
-  inactivityPeriod,
-  gracePeriod,             ← default 7 days, updated from GracePeriodUpdated
-  lastCheckIn,             ← updated from CheckIn events
-  triggeredAt,
-  isTriggered,
-  isLocked,
-  pendingRecoveryWallet,   ← set from RecoveryRequested, cleared on WalletRecovered
-  createdAt,
-  createdTxHash
+  approvedAmount, effectivePullAmount, finalPool, feePaid,
+  inactivityPeriod, gracePeriod, lastCheckIn, 
+  attestationOpen (boolean), ← NEW: Track from InactivityTriggered
+  isTriggered, isLocked, pendingRecoveryWallet, createdAt
 
 beneficiaries
   id (db), willAddress, beneficiaryId (onchain stable ID),
   wallet, percent, claimed, claimedAt
 
 signers
-  id (db), willAddress, signerAddress,
-  hasSigned,               ← updated from SignerAttested / AttestationRevoked
-  replacedAt
+  id (db), willAddress, signerAddress, hasSigned, replacedAt
 
 events
   id, willAddress, eventName, txHash, blockNumber, data, timestamp
 
-erc20_approvals            ← track token.approve(willAddress, amount) events
-  id, willAddress, ownerAddress, tokenAddress,
-  approvedAmount, blockNumber, timestamp
+erc20_approvals
+  id, willAddress, ownerAddress, tokenAddress, approvedAmount, blockNumber, timestamp
 
 ═══════════════════════════════════════════════════════════════
 SUGGESTED API ENDPOINTS
@@ -402,74 +246,29 @@ GET  /wills/:willAddress                   → single will details
 GET  /wills/:willAddress/beneficiaries     → beneficiaries list
 GET  /wills/:willAddress/signers           → signers + hasSigned status
 GET  /wills/:willAddress/events            → event history
-GET  /wills/:willAddress/status            → triggered, locked, timeUntilTrigger,
-                                             approvedAmount, effectivePullAmount
+GET  /wills/:willAddress/status            → triggered, locked, attestationOpen, etc.
 POST /wills/:willAddress/notify            → manually trigger check-in reminder
-GET  /platform/stats                       → totalWills, totalFees collected, etc.
-
-NEW ENDPOINTS NEEDED:
+GET  /platform/stats                       → totalWills, totalFees collected
 GET  /beneficiary/:walletAddress/claims    → wills where wallet is a beneficiary
-                                             (for the /claim page)
 GET  /signer/:walletAddress/wills          → wills where wallet is a signer
-                                             (for the /signer page)
 
 ═══════════════════════════════════════════════════════════════
-CHECK-IN REMINDER LOGIC  [corrected]
+ADMIN RELAYER & REMINDER LOGIC [UPDATED FOR v3]
 ═══════════════════════════════════════════════════════════════
 
-1. On will creation: set lastCheckIn = block.timestamp of WillCreated tx
-   (constructor sets s.lastCheckIn = block.timestamp)
+1. On will creation: set lastCheckIn = block.timestamp
 2. On CheckIn event: update lastCheckIn in DB
-3. Cron job (daily):
-   attestationOpensAt = lastCheckIn + inactivityPeriod
-   triggerUnlocksAt   = attestationOpensAt + gracePeriod
-
-   - if now > (attestationOpensAt - inactivityPeriod * 0.2):
-       → send check-in reminder to owner
-   - if now > attestationOpensAt:
-       → alert signers: "attestation window is open"
-   - if now > triggerUnlocksAt:
-       → alert signers: "time-trigger is available, call triggerByTime()"
-4. RISK ALERTS (new — not in old guide):
-   - if owner's approvedAmount drops to 0:
-       → warn owner their will will fail to execute at trigger
-   - if owner's wallet balance drops below approvedAmount:
-       → warn owner their effective pull amount has decreased
+3. Admin Cron Job (Runs every 1 minute):
+   - Query DB for active wills where `now > lastCheckIn + inactivityPeriod` AND `attestationOpen == false`.
+   - Use Viem + Admin Private Key to securely broadcast `will.triggerByTime()`.
+4. RISK ALERTS:
+   - if owner's approvedAmount drops to 0 → warn owner
+   - if owner's wallet balance drops below approvedAmount → warn owner
 
 ═══════════════════════════════════════════════════════════════
 NOTES & CORRECTIONS FROM OLD GUIDE
 ═══════════════════════════════════════════════════════════════
-
-REMOVED FUNCTIONALITY (do NOT implement):
-  ✗ deposit(amount) — does not exist
-  ✗ withdraw(amount) — does not exist
-  ✗ getTotalDeposited() — does not exist; use getApprovedAmount() / getEffectivePullAmount()
-
-NAME CHANGES:
-  updateBeneficiary(id, percent)
-    → now split into two functions:
-      updateBeneficiaryPercentage(id, newPercent)
-      updateBeneficiaryAddress(id, newWallet)
-
-NEW FUNCTIONS NOT IN OLD GUIDE:
-  getOneBeneficiary(uint256 id) → Beneficiary
-  getAttestationStatus() → (count, required)
-  getEffectivePullAmount() → uint256
-  getWillStatus() → (full status tuple — use for dashboard queries)
-  getOwner(), getToken(), getPlatformAddress(), getPlatformFeeBP()
-  getPendingRecoveryWallet()
-  updateBeneficiaryAddress(id, newWallet)
-
-REQURIED SIGNATURES LOGIC:
-  1 signer  → requires 1 signature to trigger
-  2+ signers → always requires exactly 2 signatures (not all signers)
-
-BASIS POINTS:
-  10000 = 100%, 5000 = 50%, 500 = 5%, 50 = 0.5% (platform fee)
-  All token amounts in wei (18 decimals unless token differs)
-  Beneficiary IDs start at 1, not 0
-  Do NOT use array index — always use the .id field
-
-WILL IS PERMANENTLY LOCKED AFTER TRIGGER:
-  Only action possible post-trigger: claim()
-  No config changes, no signer replacement, no recovery
+- REMOVED: No deposit() or withdraw() functions.
+- `triggerByTime()` is admin-only. Backend must execute it.
+- `triggerByTime()` does not pull funds; it only unlocks signers.
+- Beneficiary IDs are stable — do not use array index.
