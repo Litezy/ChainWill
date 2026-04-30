@@ -3,30 +3,31 @@ import Image from "next/image";
 import styles from "../app/page.module.css";
 import { usePathname } from "next/navigation";
 
+import Link from "next/link";
+
 export default function Header() {
     const pathname = usePathname();
     const isDashboard = pathname.startsWith("/Dashboard");
-  return (
-      !isDashboard && (
-    <div className={styles.homeContainer}>
-      <h5 className={styles.logo}><a href="/"> ChainWill</a></h5>
-"use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-const navItems = [
+    const navItems = [
   { label: "Home", href: "/" },
   { label: "About", href: "/about" },
   { label: "How It Works", href: "/how-it-works" },
 ];
-
-export default function Header() {
-  const pathname = usePathname();
-
   return (
-    <header className="fixed left-0 top-0 z-50 w-full border-b border-outline-variant bg-slate-50/80 backdrop-blur-md">
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+      
+    // <div className={styles.homeContainer}>
+    //   <h5 className={styles.logo}><a href="/"> ChainWill</a></h5>
+
+
+
+
+
+   !isDashboard && ( 
+   <header className="fixed left-0 top-0 z-50 w-full border-b border-outline-variant bg-slate-50/80 backdrop-blur-md">
+    <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+    <div className="">
+      
         <Link
           className="font-headline-md text-xl font-bold tracking-tight text-indigo-900"
           href="/"
@@ -56,7 +57,7 @@ export default function Header() {
 
       <button type="button" className={styles.connectWallet}>Connect Wallet</button>
     </div>
-      )
+      
         <div className="flex items-center gap-4">
           <button
             className="rounded-lg bg-primary px-6 py-2.5 text-label-bold font-label-bold text-on-primary transition-all hover:opacity-90 active:scale-95"
@@ -66,6 +67,6 @@ export default function Header() {
           </button>
         </div>
       </nav>
-    </header>
+    </header>)
   );
 }
