@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Will {
+  id                    String    @id @default(uuid())
+  contractAddress       String    @unique // The actual deployed ChainWill address
+  ownerAddress          String
+  tokenAddress          String
+  
+  // Funding tracking (v2 Dispatcher Model)
+  approvedAmount        String    @default("0") // Tracked from ERC20 Approval events
+  effectivePullAmount   String    @default("0") // min(approvedAmount, ownerWalletBalance)
+  finalPool             String?   // Set after trigger (WillLocked event)
+  feePaid               String?   // Set after trigger (WillLocked event)
+  
+  // Timing
+  inactivityPeriod      Int       // In seconds
+  gracePeriod           Int       @default(604800) // Default 7 days
+  lastCheckIn           DateTime
+  
+  // Status
+  isTriggered           Boolean   @default(false)
+  isLocked              Boolean   @default(false)
+  triggeredAt           DateTime?
+  pendingRecoveryWallet String?   // Set during wallet recovery requests
+  
+  createdAt             DateTime  @default(now())
+  createdTxHash         String?
+
+  // Relations
+  beneficiaries         Beneficiary[]
+  signers               Signer[]
+  erc20Approvals        Erc20Approval[]
+}
+
+model Beneficiary {
+  id            String    @id @default(uuid())
+  willId        String
+  beneficiaryId Int       // The on-chain stable ID (1, 2, 3...)
+  walletAddress String
+  percent       Int       // Basis points (5000 = 50%)
+  claimed       Boolean   @default(false)
+  claimedAt     DateTime?
+
+  will          Will      @relation(fields: [willId], references: [id])
+  
+  @@unique([willId, beneficiaryId]) // Ensures no duplicate on-chain IDs per will
+}
+
+model Signer {
+  id            String    @id @default(uuid())
+  willId        String
+  signerAddress String
+  hasSigned     Boolean   @default(false)
+  replacedAt    DateTime? // Track if owner swapped them out
+
+  will          Will      @relation(fields: [willId], references: [id])
+}
+
+model EventLog {
+  id          String   @id @default(uuid())
+  willAddress String   // Which will emitted this
+  eventName   String
+  txHash      String   @unique
+  blockNumber Int
+  data        Json
+  timestamp   DateTime @default(now())
+}
+
+model Erc20Approval {
+  id             String   @id @default(uuid())
+  willId         String
+  ownerAddress   String
+  tokenAddress   String
+  approvedAmount String   // Amount owner approved
+  blockNumber    Int
+  timestamp      DateTime @default(now())
+
+  will           Will     @relation(fields: [willId], references: [id])
+}

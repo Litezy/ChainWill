@@ -60,35 +60,38 @@ abstract contract SignerModule is WillBase, IEvents {
     /// @param oldSigner Address of signer to remove
     /// @param newSigner Address of signer to add
     function replaceSigner(address oldSigner, address newSigner) external {
-        require(msg.sender == s.owner,    "Not owner");
-        require(!s.locked,                "Will is locked");
-        require(s.isSigner[oldSigner],    "Old address is not a signer");
-        require(newSigner != address(0),  "Invalid new signer address");
-        require(!s.isSigner[newSigner],   "New address is already a signer");
-        require(newSigner != s.owner,     "Owner cannot be a signer");
+    require(msg.sender == s.owner, "Not owner");
+    require(!s.locked, "Will is locked");
 
-        // remove old signer
-        s.isSigner[oldSigner] = false;
+    require(s.isSigner[oldSigner], "Old not signer");
+    require(newSigner != address(0), "Invalid new signer");
+    require(!s.isSigner[newSigner], "Already signer");
+    require(newSigner != s.owner, "Owner cannot be signer");
 
-        // if old signer had attested — remove their vote
-        if (s.hasSigned[oldSigner]) {
-            s.hasSigned[oldSigner] = false;
-            s.signatureCount--;
-        }
+    // remove old signer from mapping
+    s.isSigner[oldSigner] = false;
 
-        // add new signer
-        s.isSigner[newSigner] = true;
-
-        // update the signers array
-        for (uint256 i = 0; i < s.signers.length; i++) {
-            if (s.signers[i] == oldSigner) {
-                s.signers[i] = newSigner;
-                break;
-            }
-        }
-
-        emit SignerReplaced(oldSigner, newSigner);
+    // handle voting cleanup
+    if (s.hasSigned[oldSigner]) {
+        s.hasSigned[oldSigner] = false;
+        s.signatureCount--;
     }
+
+    // remove from array (swap & pop)
+    for (uint256 i = 0; i < s.signers.length; i++) {
+        if (s.signers[i] == oldSigner) {
+            s.signers[i] = s.signers[s.signers.length - 1];
+            s.signers.pop();
+            break;
+        }
+    }
+
+    // add new signer
+    s.signers.push(newSigner);
+    s.isSigner[newSigner] = true;
+
+    emit SignerReplaced(oldSigner, newSigner);
+}
 
     // ─────────────────────────────────────────────────────────────────────
     // VIEWS

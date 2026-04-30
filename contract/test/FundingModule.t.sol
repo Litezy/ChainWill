@@ -27,7 +27,7 @@ contract FundingModuleTest is Test {
         signers[0] = signer1;
 
         vm.prank(owner);
-        address willAddr = factory.createWill(address(token), signers, 365 days);
+        address willAddr = factory.createWill(signers);
         will = ChainWill(willAddr);
     }
 
