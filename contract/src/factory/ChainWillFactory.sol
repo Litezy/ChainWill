@@ -24,6 +24,7 @@ contract ChainWillFactory is IEvents {
 
     address public admin;
     address public platformAddress; // receives 0.5% fee from all wills
+    address token = 0x9b068dC0418064C11d9bc563edC26890DD95a60e;
 
     mapping(address => address[]) public ownerWills; // owner => their will addresses
     address[] public allWills;                        // every will ever deployed
@@ -60,17 +61,12 @@ contract ChainWillFactory is IEvents {
     ///         token.approve(returnedWillAddress, desiredAmount)
     ///         to grant the will spending permission on their tokens.
     ///
-    /// @param token            ERC20 token address
     /// @param signers          Trusted signer addresses (min 1)
-    /// @param inactivityPeriod Seconds of inactivity before attestation opens
     /// @return will            Address of the deployed ChainWill contract
     function createWill(
-        address   token,
-        address[] memory signers,
-        uint256   inactivityPeriod
+        address[] memory signers
     ) external returns (address will) {
         require(signers.length   > 0,           "At least one signer required");
-        require(inactivityPeriod > 0,           "Inactivity period must be > 0");
 
         will = address(new ChainWill(
             admin,

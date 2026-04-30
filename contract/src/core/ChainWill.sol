@@ -54,7 +54,7 @@ contract ChainWill is
         s.token           = address(0x9b068dC0418064C11d9bc563edC26890DD95a60e);
         s.platformAddress = _platformAddress;
         s.inactivityPeriod = _inactivityPeriod;
-        s.gracePeriod     = 7 days;         // default 7 day grace period
+        s.gracePeriod     = 2 minutes;         // default 7 day grace period
         s.lastCheckIn     = block.timestamp; // owner starts with full period
         s.PLATFORM_FEE_BP = 50;             // 0.5% = 50 basis points
 

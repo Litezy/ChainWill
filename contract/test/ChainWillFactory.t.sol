@@ -25,7 +25,7 @@ contract ChainWillFactoryTest is Test {
         signers[0] = signer1;
         signers[1] = signer2;
 
-        address will = factory.createWill(address(token), signers, 365 days);
+        address will = factory.createWill( signers);
         vm.stopPrank();
 
         assertTrue(factory.isWill(will));
@@ -38,8 +38,8 @@ contract ChainWillFactoryTest is Test {
         signers[0] = signer1;
 
         vm.startPrank(owner);
-        factory.createWill(address(token), signers, 365 days);
-        factory.createWill(address(token), signers, 180 days);
+        factory.createWill(signers);
+        factory.createWill(signers);
         vm.stopPrank();
 
         assertEq(factory.getWillsByOwner(owner).length, 2);
@@ -52,14 +52,14 @@ contract ChainWillFactoryTest is Test {
     signers[0] = signer1;
 
     vm.expectRevert("Invalid token address"); // ✅ matches contract
-    factory.createWill(address(0), signers, 365 days);
+    factory.createWill(signers);
 }
 
 function test_revert_noSigners() public {
     address[] memory signers = new address[](0);
 
     vm.expectRevert("At least one signer required"); // ✅ matches contract
-    factory.createWill(address(token), signers, 365 days);
+    factory.createWill(signers);
 }
 
 function test_revert_invalidPeriod() public {
@@ -67,6 +67,6 @@ function test_revert_invalidPeriod() public {
     signers[0] = signer1;
 
     vm.expectRevert("Inactivity period must be > 0"); // ✅ matches contract
-    factory.createWill(address(token), signers, 0);
+    factory.createWill( signers);
 }
 }
