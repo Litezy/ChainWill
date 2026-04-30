@@ -1,5 +1,5 @@
 ═══════════════════════════════════════════════════════════════
-CHAINWILL — FRONTEND INTEGRATION GUIDE  [v2 — contract-verified]
+CHAINWILL — FRONTEND INTEGRATION GUIDE  [v3 — MATCHES DEPLOYED CONTRACT]
 ═══════════════════════════════════════════════════════════════
 
 OVERVIEW
@@ -9,20 +9,19 @@ needs to connect to MetaMask/WalletConnect, interact with the
 factory to deploy wills, and allow users to manage beneficiaries,
 signers, and claims.
 
-⚠️  CRITICAL ARCHITECTURE — READ FIRST:
-    There is NO deposit or withdraw flow.
-    Tokens NEVER leave the owner's wallet until the will triggers.
-    The owner calls token.approve(willAddress, amount) directly on
-    the ERC20 token contract. That approval is the "committed amount."
-    At trigger time the will contract pulls the approved tokens via
-    transferFrom. The entire Deposit/Withdraw tab in the old guide
-    is replaced with an Approval flow.
+⚠️  CRITICAL SMART CONTRACT UPDATES — READ FIRST:
+    1. At creation, the ERC20 Token (CWT) and Inactivity Period (2 mins)
+       are HARDCODED. Do not ask the user for them on the Create page.
+    2. Tokens NEVER leave the owner's wallet until the will triggers.
+    3. `triggerByTime()` is now an Admin-only function handled by the backend.
+       Signers only click "Attest" via `triggerBySigners()`.
 
 ═══════════════════════════════════════════════════════════════
 CONTRACT ADDRESSES
 ═══════════════════════════════════════════════════════════════
 
 FACTORY_ADDRESS = "0x721Ff9CD2DECFD110e8099Da4fFf2d16ac273F7B"
+TOKEN_ADDRESS   = "0x9b068dC0418064C11d9bc563edC26890DD95a60e" (CWT)
 CHAIN_ID        = 11155111  (Sepolia testnet)
 
 ═══════════════════════════════════════════════════════════════
@@ -41,14 +40,15 @@ ABIs NEEDED
 You need three ABIs:
 1. ChainWillFactory ABI  — to create wills and read all wills
 2. ChainWill ABI         — to interact with individual will instances
-3. ERC20 ABI (standard)  — to call approve() and read allowance/balance
+3. ERC20 ABI (CWT)       — to call approve(), requestToken() and read balance
 
-Store them in: src/abis/ChainWillFactory.json, ChainWill.json, ERC20.json
+Store them in: src/abis/ChainWillFactory.json, ChainWill.json, CWT_ERC20.json
 
 ═══════════════════════════════════════════════════════════════
 PAGES / SCREENS NEEDED
 ═══════════════════════════════════════════════════════════════
 
+0. /faucet            Get test CWT tokens
 1. /                  Home / Landing
 2. /dashboard         User's will overview
 3. /create            Create a new will
@@ -57,36 +57,33 @@ PAGES / SCREENS NEEDED
 6. /signer            Signer attestation page
 
 ═══════════════════════════════════════════════════════════════
+PAGE 0 — FAUCET (NEW)
+═══════════════════════════════════════════════════════════════
+
+Because the contract uses a custom "ChainWill Token" (CWT), users
+need this token to test approvals.
+- Provide a "Get Test Tokens" button on the UI.
+- Call: `CWT.requestToken()`
+- Yields 1,000 tokens once per 24 hours.
+
+═══════════════════════════════════════════════════════════════
 PAGE 1 — CREATE WILL (/create)
 ═══════════════════════════════════════════════════════════════
 
 User fills in:
-  - Token address (or select from list)
-  - Signer wallet addresses (min 1, max 5 recommended)
-  - Inactivity period (e.g. 365 days → pass as seconds: 365 * 24 * 60 * 60)
+  - Signer wallet addresses (min 1, max 3 allowed by contract)
 
 Call:
-  factory.createWill(tokenAddress, signersArray, inactivityPeriodInSeconds)
+  factory.createWill(signersArray)
+  ⚠️ REMOVED: Do not pass tokenAddress or inactivityPeriod! They are hardcoded.
 
 After tx confirmed:
   - Read WillCreated event to get the new will address
   - Redirect to /will/:newWillAddress
 
 NEXT STEP PROMPT (show after creation):
-  Show a prominent card:
   "Set your approved amount — tell the will how much to pull when triggered"
   Button: "Approve Tokens" → takes user to /will/:address (Approval tab)
-
-VALIDATION:
-  - At least 1 signer required
-  - No duplicate signers
-  - Signer address !== owner address
-  - inactivityPeriod > 0
-  - Valid token address
-
-REQUIRED SIGNATURES INFO (show to user):
-  1 signer  → 1 signature required to trigger
-  2+ signers → exactly 2 signatures required to trigger (always 2, not all)
 
 ═══════════════════════════════════════════════════════════════
 PAGE 2 — DASHBOARD (/dashboard)
@@ -96,34 +93,19 @@ Read:
   factory.getWillsByOwner(connectedWallet) → address[]
 
 For each will address, call:
-  will.getWillStatus() → single call returns all dashboard data:
-    approvedAmount        → what owner has approved will to pull
-    ownerWalletBalance    → owner's actual token balance
-    effectivePullAmount   → min(approved, balance) — actual amount at trigger
-    timeRemaining         → seconds until time-trigger (0 if elapsed)
-    attestationOpensAt    → unix timestamp signers can start attesting
-    triggerUnlocksAt      → unix timestamp time-trigger becomes available
-    triggered             → bool
-    locked                → bool
-    finalPool             → set after trigger (0 before)
+  will.getWillStatus() → Returns dashboard data:
+    approvedAmount, ownerWalletBalance, effectivePullAmount, timeRemaining,
+    attestationOpensAt, triggerUnlocksAt, triggered, locked, finalPool
 
   will.beneficiaryCount()
   will.getSigners()
-  will.getToken()        → to show token symbol
 
 Display as cards with:
   - Will address (shortened, copy button)
-  - Token: symbol / address
+  - Token: CWT
   - Status badge: Active / Triggered / Locked
-  - Approved amount (formatted with token decimals)
-  - Effective pull amount (formatted) — label as "Will pull at trigger"
-  - Time remaining countdown (see color coding rules below)
-  - Number of beneficiaries
-  - Link to manage
-
-⚠️  REMOVED from old guide — do NOT show:
-  - "Balance" (no tokens are held in the will contract)
-  - getTotalDeposited() — this function does not exist
+  - Effective pull amount (min of balance and approval)
+  - Time remaining countdown (Timer is 2 MINUTES)
 
 ═══════════════════════════════════════════════════════════════
 PAGE 3 — WILL MANAGEMENT (/will/:address)
@@ -143,232 +125,107 @@ TABS:
 TAB ① OVERVIEW
 ─────────────────────────────────
 Call will.getWillStatus() and show:
-  - Approved amount:       approvedAmount (formatted)
-  - Owner wallet balance:  ownerWalletBalance (formatted)
-  - Effective pull amount: effectivePullAmount (formatted)
-      → label: "Amount will be pulled at trigger"
-  - Final pool (post-fee): effectivePullAmount * 0.995 (projected) OR
-                           finalPool after trigger is locked
+  - Approved amount & Owner wallet balance
+  - Effective pull amount (label: "Amount to be pulled at trigger")
   - Status: triggered / locked booleans
-  - Time until trigger: format timeRemaining as days/hours
-  - Attestation opens at: format attestationOpensAt as date
-  - Trigger unlocks at:   format triggerUnlocksAt as date
   - Platform fee: 0.5% shown as info line
-  - Last check-in: from backend API / events
 
 CHECK-IN BUTTON (prominent, always visible in overview):
   - Label: "I'M ALIVE — CHECK IN"
   - Call: will.checkIn()
-  - Disabled if will.isLocked() === true
-  - Show last check-in date (from backend or CheckIn events)
-  - Show days remaining before inactivity deadline
-  - Color code urgency:
-      > 30 days  → green
-      7–30 days  → yellow/amber
-      < 7 days   → red + pulsing warning
-
-RISK WARNING BANNER (show if applicable):
-  - If approvedAmount === 0:
-      "⚠️ You have not approved any tokens. Your will cannot execute."
-      Button: "Approve Tokens" → goes to Tab ②
-  - If ownerWalletBalance < approvedAmount:
-      "⚠️ Your wallet balance is lower than your approved amount.
-       Effective pull will be [effectivePullAmount]."
+  - This resets the 2-minute inactivity clock.
 
 ─────────────────────────────────
 TAB ② TOKEN APPROVAL  (replaces old "Deposit & Withdraw")
 ─────────────────────────────────
-This is where the owner sets how much the will contract can pull.
-
-READ (on load):
-  token.allowance(ownerAddress, willAddress)   → current approved amount
-  token.balanceOf(ownerAddress)                → owner wallet balance
-  will.getToken()                              → token address (for ERC20 calls)
-
-DISPLAY:
-  - Your wallet balance: [balance] TOKEN
-  - Currently approved: [allowance] TOKEN
-  - Effective pull at trigger: [min(allowance, balance)] TOKEN
-  - After 0.5% fee, beneficiaries receive: [effective * 0.995] TOKEN
+READ:
+  CWT.allowance(ownerAddress, willAddress)
+  CWT.balanceOf(ownerAddress)
 
 APPROVE FLOW:
-  Step 1: User inputs amount to approve (or clicks "Approve Max" = wallet balance)
-  Step 2: Call token.approve(willAddress, amountInWei)
-  Step 3: Wait for tx confirmation
-  Step 4: Show updated allowance
-  NOTE: One tx only — no second step needed (unlike deposit which needed 2 steps)
-
-  Show helper text:
-  "This does NOT move your tokens. Your [TOKEN] stays in your wallet.
-   This only gives your will permission to pull up to [amount] when triggered."
-
-REVOKE APPROVAL:
-  Button: "Revoke Approval"
-  Call: token.approve(willAddress, 0)
-  Show warning: "Revoking means your will cannot execute. Are you sure?"
+  Step 1: User inputs amount to approve
+  Step 2: Call CWT.approve(willAddress, amountInWei)
+  Show helper text: "This does NOT move your tokens. Your CWT stays in your wallet. It only gives your will permission to pull up to[amount] when triggered."
 
 ─────────────────────────────────
 TAB ③ BENEFICIARIES
 ─────────────────────────────────
 READ:
-  will.getBeneficiaries() → array of:
-  {
-    id: uint256        ← USE THIS for all operations, NOT array index
-    wallet: address
-    percent: uint256   ← basis points (divide by 100 to show %)
-    claimed: bool
-    claimedAt: uint256
-  }
-
+  will.getBeneficiaries() → array of Beneficiary structs
   will.remainingPercent() → basis points unallocated
 
 ADD BENEFICIARY:
-  Input: wallet address, percentage (user enters 50 → send 50 * 100 = 5000)
   Call: will.addBeneficiary(wallet, percentInBasisPoints)
-  Validation:
-    - Valid address
-    - Not duplicate
-    - Total allocation cannot exceed 100%
-    - Show running total as user adds
-    - percent > 0
+  (User enters 50% → send 5000)
+
+UPDATE BENEFICIARY:
+  Call: will.updateBeneficiaryPercentage(beneficiary.id, newPercent)
+  Call: will.updateBeneficiaryAddress(beneficiary.id, newWalletAddress)
 
 REMOVE BENEFICIARY:
-  Button per row
   Call: will.removeBeneficiary(beneficiary.id)
-  NOTE: pass .id field, NOT array index
-
-UPDATE BENEFICIARY PERCENTAGE:
-  ⚠️  FUNCTION RENAMED — was updateBeneficiary() in old guide
-  Call: will.updateBeneficiaryPercentage(beneficiary.id, newPercentInBasisPoints)
-
-UPDATE BENEFICIARY WALLET ADDRESS:
-  ⚠️  NEW FUNCTION — not in old guide
-  Call: will.updateBeneficiaryAddress(beneficiary.id, newWalletAddress)
-  Show as "Change Wallet" option in edit modal
-
-DISPLAY TABLE:
-  | Wallet        | Share   | Status   | Actions                  |
-  | 0xAbc...1234  | 50%     | Pending  | Edit % / Change Wallet / Remove |
-  | 0xDef...5678  | 50%     | Claimed  | —                        |
-
-  Show allocation bar:
-  [████████░░] 80% allocated, 20% remaining
+  ⚠️ NOTE: ALWAYS use beneficiary.id, never the array index!
 
 ─────────────────────────────────
 TAB ④ SIGNERS
 ─────────────────────────────────
 READ:
   will.getSigners() → address[]
-  will.getAttestationStatus() → (count, required)
-  ⚠️  NEW READ — not in old guide — use to show attestation progress
+  will.getAttestationStatus() → (bool _available, uint256 count, uint256 required)
+  ⚠️ WARNING: The contract returns 3 variables now. Destructure correctly!
 
 DISPLAY:
   "Required signatures: [required]"
   "Current signatures: [count] / [required]"
-
-  List signers with:
-  - Address (shortened + full on hover)
-  - Status: Has Signed / Not Signed (from SignerAttested events via backend)
-  - Replace button (if owner and will not locked)
-
-REPLACE SIGNER:
-  Input: old signer address (pre-filled), new signer address
-  Call: will.replaceSigner(oldSigner, newSigner)
-  Note: if old signer had already signed, their vote is auto-removed
+  List signers and Replace button (will.replaceSigner(old, new))
 
 ─────────────────────────────────
 TAB ⑤ SETTINGS
 ─────────────────────────────────
-SET GRACE PERIOD:
-  Input: days → convert to seconds (days * 86400)
-  Call: will.setGracePeriod(seconds)
-  Show current value (default 7 days)
-
-SET INACTIVITY PERIOD:
-  Input: days → convert to seconds (days * 86400)
-  Call: will.setInactivityPeriod(seconds)
-  Show current value
+SET GRACE PERIOD / INACTIVITY PERIOD:
+  will.setGracePeriod(seconds)
+  will.setInactivityPeriod(seconds)
 
 WALLET RECOVERY:
-  Step 1: owner calls will.requestWalletChange(newWallet)
-  Step 2: NEW wallet connects and calls will.confirmWalletChange()
-  Show pending state between steps:
-    "Recovery pending — new wallet [0xAbc...] must confirm"
-  Button for new wallet: "I'm the new owner — Confirm"
-
+  will.requestWalletChange(newWallet)
+  will.confirmWalletChange() (called by new wallet)
   Read: will.getPendingRecoveryWallet()
-  If not address(0) → show pending banner
 
 ═══════════════════════════════════════════════════════════════
 PAGE 4 — CLAIM PAGE (/claim)
 ═══════════════════════════════════════════════════════════════
 
-Anyone can visit. Show wills where connected wallet is a beneficiary.
-
-RECOMMENDED: use backend API endpoint GET /beneficiary/:wallet/claims
-rather than looping getAllWills() on frontend (too slow).
-
-LOGIC (if using backend):
-  - API returns wills where connectedWallet is a beneficiary
-  - For each, read will.getWillStatus() for triggered/finalPool
-  - Show only where triggered === true
-
-DISPLAY:
-  | Will Owner    | Your Share | Estimated Amount | Status    | Action  |
-  | 0xAbc...      | 50%        | 500 USDC         | Unclaimed | Claim   |
-  | 0xDef...      | 30%        | 300 USDC         | Claimed ✓ | —       |
+Show wills where connected wallet is a beneficiary (use Backend API).
+RECOMMENDED: use GET /beneficiary/:wallet/claims
 
 CLAIM:
   Call: will.claim(beneficiary.id)
-  ⚠️  MUST pass beneficiary.id NOT array index
-  ⚠️  MUST be called from the exact wallet registered as the beneficiary
-      (contract checks isBenefactor[id][msg.sender])
+  ⚠️ MUST be called from the exact wallet registered to that ID.
 
 CALCULATE DISPLAY AMOUNT:
   amount = (finalPool * beneficiary.percent) / 10000
-  Format with token decimals (usually 18)
-
-  Before trigger (finalPool = 0), show projected amount:
-  projectedFinalPool = effectivePullAmount * 0.995
-  projectedAmount = (projectedFinalPool * beneficiary.percent) / 10000
-  Label clearly as "Estimated" until trigger fires
 
 ═══════════════════════════════════════════════════════════════
 PAGE 5 — SIGNER PAGE (/signer)
 ═══════════════════════════════════════════════════════════════
 
-Show wills where connected wallet is a signer.
+Show wills where connected wallet is a signer (use Backend API).
+RECOMMENDED: use GET /signer/:wallet/wills
 
-RECOMMENDED: use backend API endpoint GET /signer/:wallet/wills
+READ:
+  will.getAttestationStatus() → (bool _available, uint256 count, uint256 required)
 
-DISPLAY per will:
-  - Will owner address
-  - Token symbol
-  - Effective pull amount (if known)
-  - Last check-in date (from backend / CheckIn events)
-  - Days since last check-in
-  - Attestation opens at / Time-trigger available at
-  - Status: Owner Active / Attestation Window Open / Time-Trigger Available
-  - Attestation count: [count] / [required]
-
-ACTIONS:
-
-  Attest (trigger by signers):
-    Call: will.triggerBySigners()
-    Show if: !will.isTriggered() AND signer has NOT already signed
-    Note: if this is the final required signature, trigger fires automatically
+THE NEW TRIGGER UX:
+  If `_available` == false:
+      Show: "Waiting for Admin Relayer / Timer (2 mins)" (Button disabled)
+  If `_available` == true:
+      Show "Attest" button
+      Call: will.triggerBySigners()
+      (The final signer's transaction will automatically pull the funds)
 
   Revoke attestation:
     Call: will.revokeAttestation()
-    Show if: !will.isTriggered() AND signer HAS already signed
-
-  Trigger by time:
-    Call: will.triggerByTime()
-    Show if: will.timeUntilTrigger() === 0 AND !will.isTriggered()
-    ⚠️  Only signers can call this — check isSigner before showing button
-    ⚠️  Will REVERT if owner has 0 approval or 0 balance — warn signer first:
-        "Owner approved amount: [X]. Owner balance: [Y]. Effective: [min(X,Y)]"
-        If either is 0 → show: "Will cannot trigger — owner has no approved funds"
+    Show if: signer HAS already signed
 
 ═══════════════════════════════════════════════════════════════
 BASIS POINTS CONVERSION
@@ -377,14 +234,11 @@ BASIS POINTS CONVERSION
 The contract uses basis points internally:
   10000 = 100%
   5000  = 50%
-  500   = 5%
-  50    = 0.5%
+  50    = 0.5% (platform fee)
 
 FRONTEND CONVERSION:
   User enters: 50 (as percentage)
   Send to contract: 50 * 100 = 5000
-
-  Contract returns: 5000
   Display to user:  5000 / 100 = 50%
 
 ═══════════════════════════════════════════════════════════════
@@ -392,12 +246,6 @@ PLATFORM FEE DISPLAY
 ═══════════════════════════════════════════════════════════════
 
 Fee = 0.5% deducted at trigger time from the pulled amount.
-
-Show transparently everywhere relevant:
-  Approved Amount:     1000 USDC
-  Platform Fee (0.5%):   -5 USDC
-  Beneficiaries Receive: 995 USDC  ← finalPool
-
 Formula:
   fee = (effectivePullAmount * 50) / 10000
   projectedFinalPool = effectivePullAmount - fee
@@ -410,8 +258,10 @@ HELPER FUNCTIONS
 function formatSeconds(seconds) {
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
   if (days > 0) return `${days}d ${hours}h`
-  return `${hours}h`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
 }
 
 // convert basis points to percentage string
@@ -436,25 +286,16 @@ function projectedShare(effectivePullAmount, beneficiaryBP) {
 }
 
 ═══════════════════════════════════════════════════════════════
-KEY UX RULES  [updated]
+KEY UX RULES  [UPDATED]
 ═══════════════════════════════════════════════════════════════
 
-1. APPROVAL is one step only — token.approve(willAddress, amount)
-   NOT a two-step Approve → Deposit flow
+1. APPROVAL is one step only — CWT.approve(willAddress, amount)
 2. Disable all write actions if will.isLocked() === true
 3. Use beneficiary.id NOT array index for all operations
-4. Show countdown timer prominently on dashboard
-5. Color code urgency:
-     > 30 days remaining → green
-     7-30 days           → yellow/amber
-     < 7 days            → red + pulsing warning
-6. Show platform fee (0.5%) transparently in Approval tab and on claim page
-7. Check-in button should be the most prominent action on dashboard
-8. Show "You are a signer for X wills" and "You are a beneficiary of X wills"
-   in the navigation or profile section
-9. Always show effectivePullAmount (not just approvedAmount) — user might
-   have spent tokens since approving
-10. If approvedAmount === 0, show prominent warning and CTA to approve
+4. Show countdown timer prominently on dashboard (Max 2 mins)
+5. Show platform fee (0.5%) transparently in Approval tab
+6. Always show effectivePullAmount (not just approvedAmount)
+7. If approvedAmount === 0, show prominent warning and CTA to approve
 
 ═══════════════════════════════════════════════════════════════
 EVENTS TO LISTEN FOR (real-time updates)
@@ -462,70 +303,27 @@ EVENTS TO LISTEN FOR (real-time updates)
 
 Use wagmi's useContractEvent or viem's watchContractEvent:
 
-WillCreated           → refresh dashboard after creating
-CheckIn               → update last check-in date + timer
-WillLocked            → show triggered banner, disable write actions
-                        (now emits: timestamp, finalPool, fee)
-InactivityTriggered   → update will status
-BeneficiaryAdded      → refresh beneficiary list
-BeneficiaryUpdated    → refresh beneficiary list (percent changed)
-BeneficiaryAddressUpdated → refresh beneficiary list (wallet changed)
-BeneficiaryRemoved    → refresh beneficiary list
-BeneficiaryClaimed    → update claim status
-SignerAttested        → update signer status + attestation count
-AttestationRevoked    → update signer status + attestation count
-SignerReplaced         → update signer list
-GracePeriodUpdated    → refresh settings
-InactivityPeriodUpdated → refresh settings + recalculate deadlines
-RecoveryRequested     → show recovery pending banner
-WalletRecovered       → update owner display, clear pending banner
-
-ERC20 EVENTS (on the token contract):
-Approval(owner, willAddress, value) → update approvedAmount display
-
-REMOVED EVENTS (were in old guide, do NOT exist):
-  ✗ Deposited
-  ✗ Withdrawn
+FACTORY: WillCreated
+CHAINWILL: CheckIn, WillLocked, InactivityTriggered, BeneficiaryAdded,
+BeneficiaryUpdated, BeneficiaryAddressUpdated, BeneficiaryRemoved,
+BeneficiaryClaimed, SignerAttested, AttestationRevoked, SignerReplaced
+CWT TOKEN: Approval
 
 ═══════════════════════════════════════════════════════════════
 CORRECTIONS SUMMARY FROM OLD GUIDE
 ═══════════════════════════════════════════════════════════════
 
 REMOVED (do NOT build):
-  ✗ deposit(amount) flow
-  ✗ withdraw(amount) flow
-  ✗ "Deposit & Withdraw" tab
-  ✗ getTotalDeposited() reads
-  ✗ Deposited / Withdrawn event listeners
+  ✗ Token selection and time inputs on Create Will page
+  ✗ deposit(amount) / withdraw(amount) flow
+  ✗ Deposited / Withdrawn events
+  ✗ Frontend calling triggerByTime()
 
 RENAMED:
   updateBeneficiary(id, percent)
-  → updateBeneficiaryPercentage(id, newPercent)  [percent update]
-  → updateBeneficiaryAddress(id, newWallet)       [wallet update]
+  → updateBeneficiaryPercentage(id, newPercent)
+  → updateBeneficiaryAddress(id, newWallet)
 
-NEW FUNCTIONS TO CALL (not in old guide):
-  will.getWillStatus()               → use for dashboard (replaces many individual calls)
-  will.getEffectivePullAmount()      → show for clarity
-  will.getApprovedAmount()           → current token.allowance shortcut
-  will.getOwnerBalance()             → owner wallet balance shortcut
-  will.getOneBeneficiary(id)         → single beneficiary lookup
-  will.getAttestationStatus()        → (count, required) for signer page
-  will.getPendingRecoveryWallet()    → for recovery tab display
-  will.getToken()                    → token address
-  will.getOwner()                    → will owner address
-  will.getPlatformFeeBP()            → 50 (0.5%), for display
-
-REQUIRED SIGNATURES LOGIC (corrected):
-  1 signer  → 1 required
-  2+ signers → ALWAYS 2 required (not all, not dynamic)
-
-NOTES:
-  - Tokens always stay in owner's wallet until trigger
-  - Will contract never holds tokens before trigger
-  - At trigger: min(allowance, ownerBalance) is pulled — can be less than approved
-  - triggerByTime() and triggerBySigners() REVERT if owner has 0 balance or 0 approval
-  - All wills are separate contract instances — always use specific will address
-  - Use getWillsByOwner() for owner dashboard — never loop getAllWills() on frontend
-  - For signer/beneficiary pages, use backend API — never loop getAllWills() on frontend
-  - Beneficiary IDs start at 1, not 0
-  - 1 block confirmation is enough for UI update
+NEW UX:
+  - Faucet page added for test tokens
+  - Timer is now extremely fast (2 minutes)
