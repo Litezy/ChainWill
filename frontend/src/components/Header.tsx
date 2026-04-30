@@ -1,8 +1,13 @@
+"use client"
 import Image from "next/image";
 import styles from "../app/page.module.css";
+import { usePathname } from "next/navigation";
 
 export default function Header() {
+    const pathname = usePathname();
+    const isDashboard = pathname.startsWith("/Dashboard");
   return (
+      !isDashboard && (
     <div className={styles.homeContainer}>
       <h5 className={styles.logo}><a href="/"> ChainWill</a></h5>
 
@@ -20,5 +25,6 @@ export default function Header() {
 
       <button type="button" className={styles.connectWallet}>Connect Wallet</button>
     </div>
+      )
   );
 }
