@@ -1,0 +1,198 @@
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800;900&display=swap");
+@import "tailwindcss";
+/* ─── Design Tokens (Tailwind v4) ─────────────────────────────────────── */
+@theme {
+  /* Brand Colors */
+  --color-primary: #021064;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #1e2a78;
+  --color-on-primary-container: #8a95e9;
+  --color-primary-fixed: #dfe0ff;
+  --color-primary-fixed-dim: #bcc3ff;
+  --color-on-primary-fixed: #000d60;
+  --color-on-primary-fixed-variant: #343f8d;
+
+  --color-secondary: #505a99;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #adb7fd;
+  --color-on-secondary-container: #3c4684;
+  --color-secondary-fixed: #dee0ff;
+  --color-secondary-fixed-dim: #bbc3ff;
+  --color-on-secondary-fixed: #071352;
+  --color-on-secondary-fixed-variant: #38427f;
+
+  --color-tertiary: #391100;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #5b2000;
+  --color-on-tertiary-container: #dc845b;
+  --color-tertiary-fixed: #ffdbcc;
+  --color-tertiary-fixed-dim: #ffb595;
+  --color-on-tertiary-fixed: #351000;
+  --color-on-tertiary-fixed-variant: #753311;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  /* Surface & Background */
+  --color-surface: #fbf8ff;
+  --color-on-surface: #1b1b20;
+  --color-surface-variant: #e4e1e9;
+  --color-on-surface-variant: #454651;
+  --color-surface-bright: #fbf8ff;
+  --color-surface-dim: #dbd9e0;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f5f2fa;
+  --color-surface-container: #efedf4;
+  --color-surface-container-high: #e9e7ee;
+  --color-surface-container-highest: #e4e1e9;
+
+  --color-background: #fbf8ff;
+  --color-on-background: #1b1b20;
+
+  --color-outline: #767682;
+  --color-outline-variant: #c6c5d3;
+  --color-inverse-surface: #303036;
+  --color-inverse-on-surface: #f2eff7;
+  --color-inverse-primary: #bcc3ff;
+  --color-surface-tint: #4c58a6;
+
+  /* Spacing */
+  --spacing-card-padding: 24px;
+  --spacing-dot-pattern-size: 20px;
+  --spacing-sidebar-width: 280px;
+  --spacing-gutter: 24px;
+  --spacing-container-max: 1440px;
+  --spacing-nav-item-margin: 12px;
+
+  /* Typography families */
+  --font-sans: "Public Sans", Arial, Helvetica, sans-serif;
+  --font-headline-md: "Public Sans", sans-serif;
+  --font-label-bold: "Public Sans", sans-serif;
+  --font-body-sm: "Public Sans", sans-serif;
+  --font-nav-item: "Public Sans", sans-serif;
+  --font-display-lg: "Public Sans", sans-serif;
+  --font-body-base: "Public Sans", sans-serif;
+
+  /* Typography sizes (mapped from HTML source) */
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 1.4;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-md--font-weight: 600;
+
+  --text-label-bold: 12px;
+  --text-label-bold--line-height: 1;
+  --text-label-bold--letter-spacing: 0.05em;
+  --text-label-bold--font-weight: 600;
+
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.5;
+  --text-body-sm--letter-spacing: 0;
+  --text-body-sm--font-weight: 400;
+
+  --text-nav-item: 15px;
+  --text-nav-item--line-height: 1;
+  --text-nav-item--letter-spacing: 0;
+  --text-nav-item--font-weight: 500;
+
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 1.2;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg--font-weight: 700;
+
+  --text-body-base: 16px;
+  --text-body-base--line-height: 1.6;
+  --text-body-base--letter-spacing: 0;
+  --text-body-base--font-weight: 400;
+}
+
+/* ─── Global Reset ───────────────────────────────────────────────────────── */
+body{
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+
+
+/* ─── Body + Dot Background ──────────────────────────────────────────────── */
+body {
+  position: relative; 
+  min-height: 100vh;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  background-color: #fbf8ff;
+  padding: 0;
+  color: var(--color-on-surface);
+  font-family: "Public Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  background-image: radial-gradient(#021064 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: 0 0;
+  background-attachment: fixed;
+  background-repeat: repeat;
+}
+
+/* Overlay sits at -1, background is on body (effectively -2) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1; 
+  background: rgba(251, 248, 255, 0.9);
+  pointer-events: none;
+}
+
+/* All direct children are z-1 */
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+a {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* ─── Layout Helpers ─────────────────────────────────────────────────────── */
+.cw-container {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+.cw-section {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+.cw-page {
+  padding-top: 96px; 
+  padding-bottom: 80px;
+}
+
+@media (max-width: 640px) {
+  .cw-container,
+  .cw-section {
+    padding-inline: 16px;
+  }
+  
+  .cw-page {
+    padding-top: 80px;
+  }
+}
