@@ -1,17 +1,10 @@
-"use client";
-import Image from "next/image";
-import styles from "../app/page.module.css";
-import { usePathname } from "next/navigation";
+import Link from "next/link";
 import Icon from "@/components/Icon";
 
 const footerLinks = ["Privacy Policy", "Terms & Conditions"];
 
 export default function Footer() {
-  const pathname = usePathname();
-  const isDashboard = pathname.startsWith("/Dashboard");
-
   return (
-    
     <footer className="border-t border-slate-200 bg-slate-50">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between px-10 py-8 md:flex-row">
         <div className="mb-6 md:mb-0">
