@@ -3,14 +3,19 @@ import Beneficiaries from "@/pages/Dashboard/Beneficiaries";
 import Overview from "@/pages/Dashboard/Overview";
 import Settings from "@/pages/Dashboard/Settings";
 import Signers from "@/pages/Dashboard/Signers";
+
 import About from "@/pages/General/About";
 import Home from "@/pages/General/Home";
 import HowItWorks from "@/pages/General/HowItWorks";
+import PrivacyPolicy from "@/pages/General/PrivacyPolicy";
+import TermsAndCondition from "@/pages/General/TermsAndCondition";
 
 export const GeneralPages = [
   { path: "/", component: Home },
   { path: "/about", component: About },
   { path: "/how-it-works", component: HowItWorks },
+  { path: "/privacy-policy", component: PrivacyPolicy },
+  { path: "/terms-and-conditions", component: TermsAndCondition },
 ];
 
 export const DashboardPages = [
