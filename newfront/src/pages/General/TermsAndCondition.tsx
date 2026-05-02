@@ -3,22 +3,6 @@ import { FileText, Gavel, ShieldCheck, ScrollText } from "lucide-react";
 export default function TermsAndConditionsPage() {
   return (
     <main className="min-h-screen bg-background text-on-surface">
-      <header className="border-b border-outline-variant/60 bg-surface-container-lowest/90 backdrop-blur">
-        <div className="cw-container flex h-[70px] items-center justify-between">
-          <h1 className="text-[20px] font-extrabold text-primary">ChainWill</h1>
-
-          <nav className="hidden items-center gap-10 text-nav-item text-on-surface-variant md:flex">
-            <a href="/">Home</a>
-            <a href="/about">About</a>
-            <a href="/how-it-works">How It Works</a>
-          </nav>
-
-          <button className="rounded-[10px] bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-container">
-            Connect Wallet
-          </button>
-        </div>
-      </header>
-
       <section className="cw-page">
         <div className="mx-auto mb-14 max-w-[760px] text-center">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-primary-fixed px-4 py-1 text-label-bold font-extrabold uppercase tracking-[0.12em] text-primary">
@@ -174,31 +158,6 @@ export default function TermsAndConditionsPage() {
           />
         </div>
       </section>
-
-      <footer className="border-t border-outline-variant/60 bg-surface-container-lowest">
-        <div className="cw-container flex flex-col gap-5 py-9 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-[18px] font-extrabold text-primary">
-              ChainWill
-            </h2>
-            <p className="text-xs text-on-surface-variant">
-              © 2024 ChainWill. Secured by Smart Contracts.
-            </p>
-          </div>
-
-          <div className="flex gap-8 text-xs text-on-surface-variant">
-            <a className="underline underline-offset-4" href="/privacy-policy">
-              Privacy Policy
-            </a>
-            <a
-              className="underline underline-offset-4"
-              href="/terms-and-conditions"
-            >
-              Terms & Conditions
-            </a>
-          </div>
-        </div>
-      </footer>
     </main>
   );
 }

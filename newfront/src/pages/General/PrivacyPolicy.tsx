@@ -3,24 +3,6 @@ import { Database, LockKeyhole, ShieldCheck } from "lucide-react";
 export default function PrivacyPolicyPage() {
   return (
     <main className="min-h-screen bg-background text-on-surface">
-      <header className="border-b border-outline-variant/60 bg-surface-container-lowest/90 backdrop-blur">
-        <div className="cw-container flex h-[70px] items-center justify-between">
-          <div className="text-[20px] font-extrabold text-primary">
-            ChainWill
-          </div>
-
-          <nav className="hidden items-center gap-8 text-nav-item text-on-surface-variant md:flex">
-            <a href="#">Home</a>
-            <a href="#">About</a>
-            <a href="#">How It Works</a>
-          </nav>
-
-          <button className="rounded-[10px] bg-primary px-6 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:bg-primary-container">
-            Connect Wallet
-          </button>
-        </div>
-      </header>
-
       <section className="cw-page">
         <div className="mx-auto max-w-[900px] rounded-2xl border border-outline-variant/70 bg-surface-container-lowest px-12 py-12 shadow-sm md:px-20 md:py-14">
           <div className="mb-14 text-center">
@@ -128,27 +110,6 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
       </section>
-
-      <footer className="border-t border-outline-variant/60 bg-surface-container-lowest">
-        <div className="cw-container flex flex-col gap-6 py-9 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-[20px] font-extrabold text-primary">
-              ChainWill
-            </h2>
-            <p className="mt-3 text-sm text-on-surface-variant">
-              © 2024 ChainWill. Secured by Smart Contracts.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-8 text-sm text-on-surface-variant">
-            <a className="underline underline-offset-4" href="#">
-              Privacy Policy
-            </a>
-            <a href="#">Terms & Conditions</a>
-            <a href="#">Security Audit</a>
-          </div>
-        </div>
-      </footer>
     </main>
   );
 }
