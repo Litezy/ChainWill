@@ -16,7 +16,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-slate-100">
       <Sidebar onDraftNewWill={() => setCreateWillOpen(true)} />
 
-      <div className="lg:ml-[23%]">
+      <div className="lg:ml-[18%]">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-slate-100/95 px-4 py-3 backdrop-blur-sm lg:hidden">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
             <Link to="/auth/overview" className="text-base font-semibold text-slate-950">
@@ -26,7 +26,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               <button
                 type="button"
                 onClick={() => setCreateWillOpen(true)}
-                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90"
+                className="rounded-full bg-primary px-4 py-1.5 !text-xs font-semibold text-white transition hover:bg-primary/90"
               >
                 Draft Will
               </button>
@@ -59,7 +59,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           ) : null}
         </header>
 
-        <main className="min-h-screen overflow-y-auto px-4 py-4 md:px-6 md:py-6">{children}</main>
+        <main className="min-h-screen overflow-y-auto  py-4 md:px-4 md:py-6">{children}</main>
       </div>
 
       {createWillOpen && <CreateNewWill onClose={() => setCreateWillOpen(false)} />}

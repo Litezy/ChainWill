@@ -15,7 +15,7 @@ interface SidebarProps {
 
 export default function Sidebar({ onDraftNewWill }: SidebarProps) {
   return (
-    <aside className="hidden lg:flex fixed top-0 left-0 z-20 h-screen w-[25%] min-w-[280px] flex-col justify-between border-r border-slate-200 bg-slate-50 px-6 py-4">
+    <aside className="hidden lg:flex fixed top-0 left-0 z-20 h-screen w-[20%] min-w-[280px] flex-col justify-between border-r border-slate-200 bg-slate-50 px-6 py-4">
       <div className="space-y-8">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold text-primary">ChainWill</h1>
