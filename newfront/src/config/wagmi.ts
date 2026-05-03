@@ -13,7 +13,7 @@ const connectors = connectorsForWallets(
     ...wallets,
     {
       groupName: 'More',
-      wallets: [metaMaskWallet], // 👈 explicitly add MetaMask
+      wallets: [metaMaskWallet],
     },
   ],
   {
