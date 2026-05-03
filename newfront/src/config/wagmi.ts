@@ -1,5 +1,5 @@
-import { getDefaultConfig, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
-import { metaMaskWallet, rainbowWallet, walletConnectWallet, coinbaseWallet } from '@rainbow-me/rainbowkit/wallets'
+import { getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
+import { metaMaskWallet } from '@rainbow-me/rainbowkit/wallets'
 import { createConfig, http } from 'wagmi'
 import { sepolia } from 'wagmi/chains'
 

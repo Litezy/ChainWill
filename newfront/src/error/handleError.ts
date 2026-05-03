@@ -1,32 +1,43 @@
-import toast from 'react-hot-toast'
+import { errorMessage } from "@/utils/messageStatus";
 
-export function handleError(error: any) {
-  console.error(error)
+/**
+ * Extract readable message from ethers error
+ */
+export const decodeContractError = (error: any): string => {
+  // 🟢 1. Direct reason (most common)
+  if (error?.reason) return error.reason;
 
-  let message = 'Something went wrong'
+  // 🟢 2. Nested error (ethers v6 structure)
+  if (error?.cause?.reason) return error.cause.reason;
 
-  // ── viem / wagmi errors ─────────────────────────
-  if (error?.shortMessage) {
-    message = error.shortMessage
+  // 🟢 3. Revert data parsing
+  if (error?.data?.message) return error.data.message;
+
+  // 🟢 4. Short message (ethers v6)
+  if (error?.shortMessage) return error.shortMessage;
+
+  // 🟢 5. MetaMask / RPC error
+  if (error?.message) {
+    // Clean ugly RPC messages
+    if (error.message.includes("execution reverted")) {
+      return error.message.replace("execution reverted:", "").trim();
+    }
+
+    if (error.message.includes("user rejected")) {
+      return "Transaction was rejected";
+    }
+
+    return error.message;
   }
 
-  // ── metamask / rpc errors ───────────────────────
-  else if (error?.message) {
-    message = error.message
-  }
+  return "Transaction failed";
+};
 
-  // ── contract reverts (decoded sometimes) ────────
-  if (message.includes('User rejected')) {
-    message = 'Transaction rejected by user'
-  }
 
-  if (message.includes('insufficient funds')) {
-    message = 'Insufficient balance for transaction'
-  }
+export const handleContractError = (error: any) => {
+  const message = decodeContractError(error);
 
-  if (message.includes('execution reverted')) {
-    message = 'Contract execution failed'
-  }
+  console.error("Contract Error:", error);
 
-  toast.error(message)
-}
+  errorMessage(message);
+};

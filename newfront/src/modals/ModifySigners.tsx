@@ -4,8 +4,6 @@ import { X } from 'lucide-react';
 import ModalLayout from '@/layouts/ModalLayout';
 import FormInput from '@/components/FormInput';
 
-const roles = ['Primary Guardian', 'Secondary Legal', 'Family Representative'];
-
 type AddSignerPayload = {
   name: string;
   address: string;

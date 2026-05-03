@@ -1,4 +1,5 @@
 import Icon from "@/components/Icon";
+import CustomConnectButton from '@/components/CustomConnectButton';
 
 const avatars = [
   {
@@ -55,9 +56,7 @@ export default function Home() {
 
           {/* CTAs */}
           <div className="flex flex-col gap-4 pt-2 sm:flex-row sm:flex-wrap">
-            <button className="rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white shadow-md transition-opacity hover:opacity-90 active:scale-95">
-              Draft My Will
-            </button>
+           <CustomConnectButton title='Draft My Will'/>
             <button className="rounded-lg border border-primary-support bg-white px-8 py-3 text-base font-semibold text-primary shadow-sm transition-colors hover:bg-slate-50 active:scale-95">
               View Demo
             </button>

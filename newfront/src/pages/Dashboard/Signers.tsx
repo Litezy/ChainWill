@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ShieldCheck, UserCircle2, Plus } from 'lucide-react';
+import { ShieldCheck, UserCircle2 } from 'lucide-react';
 import ModifySigners from '@/modals/ModifySigners';
 
 type Signer = {
