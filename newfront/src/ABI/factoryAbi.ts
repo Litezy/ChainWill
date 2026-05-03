@@ -172,6 +172,6 @@ const FACTORY_ABI = [
       { indexed: false, name: "newAddress", type: "address" },
     ],
   },
-];
+] as const;
 
 export default FACTORY_ABI

@@ -20,7 +20,7 @@ export const GeneralPages = [
 ];
 
 export const StandalonePages = [
-  { path: "/claim-inheritance", component: ClaimInheritance },
+  { path: "/claim-inheritance/:email", component: ClaimInheritance },
 ];
 
 export const DashboardPages = [

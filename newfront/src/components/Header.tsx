@@ -1,14 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useAccount, useDisconnect } from 'wagmi'
+import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useWillOwner } from '@/hooks/useWillOwner'
+import { useWillOwner } from '@/hooks/child/useWillOwner'
 
 export default function Header() {
   const location  = useLocation()
   const pathname  = location.pathname
   const navigate  = useNavigate()
   const { address, isConnected } = useAccount()
-  const { disconnect } = useDisconnect()
   const { ownsWill, isLoading: isCheckingWill } = useWillOwner(address)
 
   const navItems = [
@@ -23,7 +22,7 @@ export default function Header() {
 
         {/* logo */}
         <Link
-          className="text-xl font-semibold tracking-tight text-indigo-950"
+          className="text-xl !text-primary !font-extrabold tracking-wide "
           to="/"
         >
           ChainWill
@@ -58,7 +57,7 @@ export default function Header() {
               <button
                 onClick={() => navigate('/auth/overview')}
                 type="button"
-                className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+                className="rounded-xl bg-primary px-5 py-2 !text-sm font-semibold text-white transition hover:bg-primary/90"
               >
                 Visit Dashboard
               </button>
@@ -66,20 +65,13 @@ export default function Header() {
               <button
                 onClick={() => navigate('/create-will')}
                 type="button"
-                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="rounded-xl bg-primary px-5 py-2 !text-sm font-semibold text-white transition hover:bg-primary/90"
               >
                 Create New Will
               </button>
             )
           )}
 
-          {/* ✅ RainbowKit ConnectButton
-              - shows wallet modal on click (MetaMask, WalletConnect, Coinbase etc)
-              - auto detects installed wallets
-              - shows address + avatar when connected
-              - handles disconnect internally
-              - fully styled and accessible
-          */}
           <ConnectButton
             accountStatus="address"   // show shortened address when connected
             chainStatus="icon"        // show chain icon only

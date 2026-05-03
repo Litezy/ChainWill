@@ -1,4 +1,4 @@
-import { FileText, Gavel, ShieldCheck, ScrollText } from "lucide-react";
+import { FileText, Gavel, ShieldCheck } from "lucide-react";
 
 export default function TermsAndConditionsPage() {
   return (
