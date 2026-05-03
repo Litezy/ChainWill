@@ -167,6 +167,11 @@ button {
 }
 
 /* ─── Layout Helpers ─────────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+}
+
 .cw-container {
   width: 100%;
   max-width: 1280px;

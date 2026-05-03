@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { GeneralPages, DashboardPages } from '@/routes/routes'
+import { GeneralPages, DashboardPages, StandalonePages } from '@/routes/routes'
 import GenePageLayout from '@/layouts/GenePageLayout'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import AuthGuard from '@/components/AuthGuard'
@@ -38,6 +38,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         {renderRoutes(GeneralPages, { layout: GenePageLayout })}
+        {renderRoutes(StandalonePages)}
         {renderRoutes(DashboardPages, { layout: DashboardLayout, auth: true })}
         <Route path="*" element={<NotFound />} />
       </Routes>
