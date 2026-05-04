@@ -22,31 +22,44 @@ app.use(express_1.default.json());
 app.use('/api/wills', will_routes_1.default);
 // Health Check Endpoint
 app.get('/health', (req, res) => {
+    const dbConnected = global.dbConnected || false;
     res.status(200).json({
         status: 'OK',
         message: 'ChainWill API is running',
-        web3Services: web3EventService_1.web3EventService.isHealthy() ? 'running' : 'stopped',
+        database: dbConnected ? 'connected' : 'disconnected',
+        web3Services: dbConnected && web3EventService_1.web3EventService.isHealthy() ? 'running' : 'stopped',
+        timestamp: new Date().toISOString(),
     });
 });
 const PORT = process.env.PORT || 8000;
 // Start server and services
 const server = app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
+    let dbConnected = false;
     try {
         await db_1.prisma.$connect();
-        console.log('Database connection established');
+        console.log('✓ Database connection established');
+        dbConnected = true;
     }
     catch (error) {
-        console.error('Failed to connect to database:', error);
-        process.exit(1);
+        console.warn('⚠ Database connection failed:', error instanceof Error ? error.message : error);
+        console.warn('⚠ Server will run without database. Some endpoints may not work.');
+        console.warn('⚠ Check your DATABASE_URL and ensure Supabase is accessible.');
     }
-    try {
-        // Start Web3 event listeners and background jobs
-        await web3EventService_1.web3EventService.start();
+    // Store db status globally for health checks
+    global.dbConnected = dbConnected;
+    if (dbConnected) {
+        try {
+            // Start Web3 event listeners and background jobs only if DB is connected
+            await web3EventService_1.web3EventService.start();
+        }
+        catch (error) {
+            console.error('Failed to start Web3 services:', error);
+            // Continue running the server even if services fail to start
+        }
     }
-    catch (error) {
-        console.error('Failed to start Web3 services:', error);
-        // Continue running the server even if services fail to start
+    else {
+        console.warn('Web3 services disabled until database connection is available');
     }
 });
 // Graceful shutdown
