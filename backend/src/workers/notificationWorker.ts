@@ -103,6 +103,10 @@ export class NotificationWorkerService {
       return;
     }
 
+    if (job.type === 'manual-check-in-reminder') {
+      return;
+    }
+
     await prisma.will.update({
       where: { id: job.willId },
       data: {
@@ -121,6 +125,10 @@ export class NotificationWorkerService {
             attestationAlertEnqueuedAt: null,
           },
         });
+        return;
+      }
+
+      if (job.type === 'manual-check-in-reminder') {
         return;
       }
 
