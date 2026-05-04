@@ -39,9 +39,6 @@ class Web3EventService {
      * Stop all services gracefully
      */
     async stop() {
-        if (!this.isRunning) {
-            return;
-        }
         console.log('[Web3EventService] Stopping all Web3 services...');
         try {
             approvalListener_1.approvalListener.stop();
@@ -59,6 +56,12 @@ class Web3EventService {
      */
     isHealthy() {
         return this.isRunning;
+    }
+    getStatus() {
+        return {
+            running: this.isRunning,
+            inactivityMonitor: monitor_1.inactivityMonitorJob.getStatus(),
+        };
     }
 }
 exports.Web3EventService = Web3EventService;

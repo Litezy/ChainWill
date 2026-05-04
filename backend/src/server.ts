@@ -27,12 +27,21 @@ app.use('/api/wills', willRoutes);
 // Health Check Endpoint
 app.get('/health', (req, res) => {
   const dbConnected = (global as any).dbConnected || false;
+  const web3Status = web3EventService.getStatus();
   res.status(200).json({
     status: 'OK',
     message: 'ChainWill API is running',
     database: dbConnected ? 'connected' : 'disconnected',
     web3Services:
       dbConnected && web3EventService.isHealthy() ? 'running' : 'stopped',
+    relayer: dbConnected
+      ? web3Status.inactivityMonitor
+      : {
+          running: false,
+          configured: false,
+          relayerAddress: null,
+          lastCompletedAt: null,
+        },
     notifications:
       dbConnected && notificationWorker.isHealthy() ? 'running' : 'stopped',
     timestamp: new Date().toISOString(),
