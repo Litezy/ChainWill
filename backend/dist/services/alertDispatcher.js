@@ -69,6 +69,26 @@ class AlertDispatcherService {
                 },
             };
         }
+        if (job.type === 'manual-check-in-reminder') {
+            const lines = [
+                `This is a manual check-in reminder for will ${job.willId}.`,
+                `Contract address: ${job.contractAddress}.`,
+                `Owner address: ${job.ownerAddress}.`,
+                'Please check in to confirm that you are still active on ChainWill.',
+            ];
+            return {
+                category: job.type,
+                subject: 'Check-In Reminder',
+                to: job.recipients,
+                text: lines.join('\n'),
+                html: renderHtmlBody(lines),
+                metadata: {
+                    willId: job.willId,
+                    contractAddress: job.contractAddress,
+                    ownerAddress: job.ownerAddress,
+                },
+            };
+        }
         const lines = [
             `Funding risk detected for will ${job.willId}.`,
             `Contract address: ${job.contractAddress}.`,

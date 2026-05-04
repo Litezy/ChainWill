@@ -22,7 +22,11 @@ notificationQueueConnection.on('error', (error) => {
   console.error('[NotificationQueue] Redis connection error:', error);
 });
 
-function getNotificationJobId(job: NotificationJobData): string {
+function getNotificationJobId(job: NotificationJobData): string | undefined {
+  if (job.type === 'manual-check-in-reminder') {
+    return undefined;
+  }
+
   return `${job.type}:${job.willId}`;
 }
 
@@ -41,9 +45,16 @@ export class NotificationQueueService {
   });
 
   async enqueue(job: NotificationJobData): Promise<void> {
-    await this.queue.add(job.type, job, {
-      jobId: getNotificationJobId(job),
-    });
+    const jobId = getNotificationJobId(job);
+    await this.queue.add(
+      job.type,
+      job,
+      jobId
+        ? {
+            jobId,
+          }
+        : undefined
+    );
 
     console.log(
       `[NotificationQueue] Enqueued ${job.type} notification for will ${job.willId}`
