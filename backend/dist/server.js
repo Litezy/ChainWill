@@ -9,10 +9,13 @@ const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const will_routes_1 = __importDefault(require("./routes/will.routes"));
+const notificationQueue_1 = require("./queues/notificationQueue");
 const web3EventService_1 = require("./services/web3EventService");
 const db_1 = require("./config/db");
+const notificationWorker_1 = require("./workers/notificationWorker");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
+const shouldAutostartNotificationWorker = process.env.NOTIFICATION_WORKER_AUTOSTART !== 'false';
 // Middleware
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)());
@@ -28,6 +31,7 @@ app.get('/health', (req, res) => {
         message: 'ChainWill API is running',
         database: dbConnected ? 'connected' : 'disconnected',
         web3Services: dbConnected && web3EventService_1.web3EventService.isHealthy() ? 'running' : 'stopped',
+        notifications: dbConnected && notificationWorker_1.notificationWorker.isHealthy() ? 'running' : 'stopped',
         timestamp: new Date().toISOString(),
     });
 });
@@ -50,6 +54,12 @@ const server = app.listen(PORT, async () => {
     global.dbConnected = dbConnected;
     if (dbConnected) {
         try {
+            if (shouldAutostartNotificationWorker) {
+                await notificationWorker_1.notificationWorker.start();
+            }
+            else {
+                console.log('[Server] Notification worker autostart disabled');
+            }
             // Start Web3 event listeners and background jobs only if DB is connected
             await web3EventService_1.web3EventService.start();
         }
@@ -68,6 +78,8 @@ process.on('SIGTERM', async () => {
     server.close(async () => {
         console.log('HTTP server closed');
         await web3EventService_1.web3EventService.stop();
+        await notificationWorker_1.notificationWorker.stop();
+        await notificationQueue_1.notificationQueue.close();
         await db_1.prisma.$disconnect();
         process.exit(0);
     });
@@ -77,6 +89,8 @@ process.on('SIGINT', async () => {
     server.close(async () => {
         console.log('HTTP server closed');
         await web3EventService_1.web3EventService.stop();
+        await notificationWorker_1.notificationWorker.stop();
+        await notificationQueue_1.notificationQueue.close();
         await db_1.prisma.$disconnect();
         process.exit(0);
     });
@@ -85,6 +99,8 @@ process.on('SIGINT', async () => {
 process.on('uncaughtException', async (error) => {
     console.error('Uncaught Exception:', error);
     await web3EventService_1.web3EventService.stop();
+    await notificationWorker_1.notificationWorker.stop();
+    await notificationQueue_1.notificationQueue.close();
     await db_1.prisma.$disconnect();
     process.exit(1);
 });

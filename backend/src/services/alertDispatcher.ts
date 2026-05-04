@@ -1,14 +1,28 @@
-interface AlertEmailPayload {
-  category: 'attestation-open' | 'funding-risk';
-  subject: string;
-  to: string[];
-  text: string;
-  metadata: Record<string, unknown>;
-}
+import dotenv from 'dotenv';
+import type { AlertEmailPayload, NotificationJobData } from '../types/notifications';
+
+dotenv.config();
 
 interface RecipientResolverInput {
   address: string;
   email?: string | null;
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderHtmlBody(lines: string[]): string {
+  return [
+    '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">',
+    ...lines.map((line) => `<p>${escapeHtml(line)}</p>`),
+    '</div>',
+  ].join('');
 }
 
 function parseEmailOverrides(): Record<string, string> {
@@ -36,8 +50,10 @@ function parseEmailOverrides(): Record<string, string> {
 }
 
 export class AlertDispatcherService {
-  private readonly webhookUrl = process.env.ALERT_WEBHOOK_URL;
-  private readonly webhookToken = process.env.ALERT_WEBHOOK_BEARER_TOKEN;
+  private readonly resendApiKey = process.env.RESEND_API_KEY;
+  private readonly emailFrom =
+    process.env.ALERT_EMAIL_FROM || 'ChainWill <onboarding@resend.dev>';
+  private readonly emailReplyTo = process.env.ALERT_EMAIL_REPLY_TO;
   private readonly emailOverrides = parseEmailOverrides();
 
   resolveRecipientEmail(input: RecipientResolverInput): string | null {
@@ -50,57 +66,52 @@ export class AlertDispatcherService {
     return this.emailOverrides[normalizedAddress] ?? null;
   }
 
-  async sendAttestationOpenAlert(input: {
-    willId: string;
-    contractAddress: string;
-    recipients: string[];
-  }): Promise<void> {
-    await this.dispatchEmail({
-      category: 'attestation-open',
-      subject: 'Attestation Open',
-      to: input.recipients,
-      text: [
-        `Attestation is now open for will ${input.willId}.`,
-        `Contract address: ${input.contractAddress}.`,
+  buildEmailPayload(job: NotificationJobData): AlertEmailPayload {
+    if (job.type === 'attestation-open') {
+      const lines = [
+        `Attestation is now open for will ${job.willId}.`,
+        `Contract address: ${job.contractAddress}.`,
         'Please review and act if attestation is required.',
-      ].join('\n'),
-      metadata: {
-        willId: input.willId,
-        contractAddress: input.contractAddress,
-      },
-    });
-  }
+      ];
 
-  async sendFundingRiskAlert(input: {
-    willId: string;
-    contractAddress: string;
-    recipient: string[];
-    approvedAmount: string;
-    ownerBalance: string;
-    reasons: string[];
-  }): Promise<void> {
-    await this.dispatchEmail({
-      category: 'funding-risk',
+      return {
+        category: job.type,
+        subject: 'Attestation Open',
+        to: job.recipients,
+        text: lines.join('\n'),
+        html: renderHtmlBody(lines),
+        metadata: {
+          willId: job.willId,
+          contractAddress: job.contractAddress,
+        },
+      };
+    }
+
+    const lines = [
+      `Funding risk detected for will ${job.willId}.`,
+      `Contract address: ${job.contractAddress}.`,
+      `Approved amount: ${job.approvedAmount}.`,
+      `Owner balance: ${job.ownerBalance}.`,
+      `Reason: ${job.reasons.join(', ')}.`,
+    ];
+
+    return {
+      category: job.type,
       subject: 'Funding Risk Alert',
-      to: input.recipient,
-      text: [
-        `Funding risk detected for will ${input.willId}.`,
-        `Contract address: ${input.contractAddress}.`,
-        `Approved amount: ${input.approvedAmount}.`,
-        `Owner balance: ${input.ownerBalance}.`,
-        `Reason: ${input.reasons.join(', ')}.`,
-      ].join('\n'),
+      to: job.recipients,
+      text: lines.join('\n'),
+      html: renderHtmlBody(lines),
       metadata: {
-        willId: input.willId,
-        contractAddress: input.contractAddress,
-        approvedAmount: input.approvedAmount,
-        ownerBalance: input.ownerBalance,
-        reasons: input.reasons,
+        willId: job.willId,
+        contractAddress: job.contractAddress,
+        approvedAmount: job.approvedAmount,
+        ownerBalance: job.ownerBalance,
+        reasons: job.reasons,
       },
-    });
+    };
   }
 
-  private async dispatchEmail(payload: AlertEmailPayload): Promise<void> {
+  async sendAlertEmail(payload: AlertEmailPayload): Promise<void> {
     if (payload.to.length === 0) {
       console.warn(
         `[AlertDispatcher] Skipping ${payload.category} alert because no recipients were resolved`
@@ -108,7 +119,7 @@ export class AlertDispatcherService {
       return;
     }
 
-    if (!this.webhookUrl) {
+    if (!this.resendApiKey) {
       console.log(
         `[AlertDispatcher] ${payload.category} alert prepared for ${payload.to.join(', ')}`
       );
@@ -116,20 +127,30 @@ export class AlertDispatcherService {
       return;
     }
 
-    const response = await fetch(this.webhookUrl, {
+    const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
+        Authorization: `Bearer ${this.resendApiKey}`,
         'Content-Type': 'application/json',
-        ...(this.webhookToken
-          ? { Authorization: `Bearer ${this.webhookToken}` }
-          : {}),
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        from: this.emailFrom,
+        to: payload.to,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+        reply_to: this.emailReplyTo,
+        tags: [
+          { name: 'category', value: payload.category },
+          { name: 'source', value: 'chainwill-monitor' },
+        ],
+      }),
     });
 
     if (!response.ok) {
+      const body = await response.text();
       throw new Error(
-        `Alert webhook failed with ${response.status} ${response.statusText}`
+        `Resend request failed with ${response.status} ${response.statusText}: ${body}`
       );
     }
   }
