@@ -32,7 +32,9 @@ model Will {
   isLocked              Boolean   @default(false)
   triggeredAt           DateTime?
   pendingRecoveryWallet String?   // Set during wallet recovery requests
+  attestationAlertEnqueuedAt DateTime?
   attestationAlertSentAt DateTime?
+  fundingRiskAlertEnqueuedAt DateTime?
   fundingRiskAlertSentAt DateTime?
   
   createdAt             DateTime  @default(now())

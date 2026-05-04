@@ -1,15 +1,19 @@
+import type { Prisma } from '@prisma/client';
 import cron from 'node-cron';
 import { parseAbi } from 'viem';
 import { prisma } from '../config/db';
 import { CHAINWILL_ABI } from '../config/abi';
 import { viemClient } from '../config/web3';
+import { notificationQueue } from '../queues/notificationQueue';
 import { alertDispatcher } from '../services/alertDispatcher';
 
 const chainWillAbi = parseAbi(CHAINWILL_ABI);
 
-type ActiveWillRecord = Awaited<
-  ReturnType<typeof prisma.will.findMany>
->[number];
+type ActiveWillRecord = Prisma.WillGetPayload<{
+  include: {
+    signers: true;
+  };
+}>;
 
 export class InactivityMonitorJob {
   private task: ReturnType<typeof cron.schedule> | null = null;
@@ -112,7 +116,9 @@ export class InactivityMonitorJob {
 
       const updateData: {
         attestationOpen?: boolean;
+        attestationAlertEnqueuedAt?: Date | null;
         attestationAlertSentAt?: Date | null;
+        fundingRiskAlertEnqueuedAt?: Date | null;
         fundingRiskAlertSentAt?: Date | null;
       } = {};
 
@@ -124,7 +130,15 @@ export class InactivityMonitorJob {
         updateData.attestationAlertSentAt = null;
       }
 
-      if (attestationOpen && !will.attestationAlertSentAt) {
+      if (!attestationOpen && will.attestationAlertEnqueuedAt) {
+        updateData.attestationAlertEnqueuedAt = null;
+      }
+
+      if (
+        attestationOpen &&
+        !will.attestationAlertSentAt &&
+        !will.attestationAlertEnqueuedAt
+      ) {
         const recipients = Array.from(
           new Set(
             will.signers
@@ -138,35 +152,45 @@ export class InactivityMonitorJob {
           )
         );
 
-        await alertDispatcher.sendAttestationOpenAlert({
+        await notificationQueue.enqueue({
+          type: 'attestation-open',
           willId: will.id,
           contractAddress: will.contractAddress,
           recipients,
         });
 
-        updateData.attestationAlertSentAt = new Date();
+        updateData.attestationAlertEnqueuedAt = new Date();
       }
 
       if (fundingReasons.length === 0 && will.fundingRiskAlertSentAt) {
         updateData.fundingRiskAlertSentAt = null;
       }
 
-      if (fundingReasons.length > 0 && !will.fundingRiskAlertSentAt) {
+      if (fundingReasons.length === 0 && will.fundingRiskAlertEnqueuedAt) {
+        updateData.fundingRiskAlertEnqueuedAt = null;
+      }
+
+      if (
+        fundingReasons.length > 0 &&
+        !will.fundingRiskAlertSentAt &&
+        !will.fundingRiskAlertEnqueuedAt
+      ) {
         const ownerEmail = alertDispatcher.resolveRecipientEmail({
           address: will.ownerAddress,
           email: will.ownerEmail,
         });
 
-        await alertDispatcher.sendFundingRiskAlert({
+        await notificationQueue.enqueue({
+          type: 'funding-risk',
           willId: will.id,
           contractAddress: will.contractAddress,
-          recipient: ownerEmail ? [ownerEmail] : [],
+          recipients: ownerEmail ? [ownerEmail] : [],
           approvedAmount: will.approvedAmount,
           ownerBalance: ownerBalanceString,
           reasons: fundingReasons,
         });
 
-        updateData.fundingRiskAlertSentAt = new Date();
+        updateData.fundingRiskAlertEnqueuedAt = new Date();
       }
 
       if (Object.keys(updateData).length > 0) {

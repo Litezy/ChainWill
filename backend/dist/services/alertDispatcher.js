@@ -1,6 +1,26 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.alertDispatcher = exports.AlertDispatcherService = void 0;
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+function escapeHtml(input) {
+    return input
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+function renderHtmlBody(lines) {
+    return [
+        '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">',
+        ...lines.map((line) => `<p>${escapeHtml(line)}</p>`),
+        '</div>',
+    ].join('');
+}
 function parseEmailOverrides() {
     const raw = process.env.ALERT_EMAIL_OVERRIDES;
     if (!raw) {
@@ -19,8 +39,9 @@ function parseEmailOverrides() {
     }
 }
 class AlertDispatcherService {
-    webhookUrl = process.env.ALERT_WEBHOOK_URL;
-    webhookToken = process.env.ALERT_WEBHOOK_BEARER_TOKEN;
+    resendApiKey = process.env.RESEND_API_KEY;
+    emailFrom = process.env.ALERT_EMAIL_FROM || 'ChainWill <onboarding@resend.dev>';
+    emailReplyTo = process.env.ALERT_EMAIL_REPLY_TO;
     emailOverrides = parseEmailOverrides();
     resolveRecipientEmail(input) {
         const normalizedAddress = input.address.toLowerCase();
@@ -29,65 +50,79 @@ class AlertDispatcherService {
         }
         return this.emailOverrides[normalizedAddress] ?? null;
     }
-    async sendAttestationOpenAlert(input) {
-        await this.dispatchEmail({
-            category: 'attestation-open',
-            subject: 'Attestation Open',
-            to: input.recipients,
-            text: [
-                `Attestation is now open for will ${input.willId}.`,
-                `Contract address: ${input.contractAddress}.`,
+    buildEmailPayload(job) {
+        if (job.type === 'attestation-open') {
+            const lines = [
+                `Attestation is now open for will ${job.willId}.`,
+                `Contract address: ${job.contractAddress}.`,
                 'Please review and act if attestation is required.',
-            ].join('\n'),
-            metadata: {
-                willId: input.willId,
-                contractAddress: input.contractAddress,
-            },
-        });
-    }
-    async sendFundingRiskAlert(input) {
-        await this.dispatchEmail({
-            category: 'funding-risk',
+            ];
+            return {
+                category: job.type,
+                subject: 'Attestation Open',
+                to: job.recipients,
+                text: lines.join('\n'),
+                html: renderHtmlBody(lines),
+                metadata: {
+                    willId: job.willId,
+                    contractAddress: job.contractAddress,
+                },
+            };
+        }
+        const lines = [
+            `Funding risk detected for will ${job.willId}.`,
+            `Contract address: ${job.contractAddress}.`,
+            `Approved amount: ${job.approvedAmount}.`,
+            `Owner balance: ${job.ownerBalance}.`,
+            `Reason: ${job.reasons.join(', ')}.`,
+        ];
+        return {
+            category: job.type,
             subject: 'Funding Risk Alert',
-            to: input.recipient,
-            text: [
-                `Funding risk detected for will ${input.willId}.`,
-                `Contract address: ${input.contractAddress}.`,
-                `Approved amount: ${input.approvedAmount}.`,
-                `Owner balance: ${input.ownerBalance}.`,
-                `Reason: ${input.reasons.join(', ')}.`,
-            ].join('\n'),
+            to: job.recipients,
+            text: lines.join('\n'),
+            html: renderHtmlBody(lines),
             metadata: {
-                willId: input.willId,
-                contractAddress: input.contractAddress,
-                approvedAmount: input.approvedAmount,
-                ownerBalance: input.ownerBalance,
-                reasons: input.reasons,
+                willId: job.willId,
+                contractAddress: job.contractAddress,
+                approvedAmount: job.approvedAmount,
+                ownerBalance: job.ownerBalance,
+                reasons: job.reasons,
             },
-        });
+        };
     }
-    async dispatchEmail(payload) {
+    async sendAlertEmail(payload) {
         if (payload.to.length === 0) {
             console.warn(`[AlertDispatcher] Skipping ${payload.category} alert because no recipients were resolved`);
             return;
         }
-        if (!this.webhookUrl) {
+        if (!this.resendApiKey) {
             console.log(`[AlertDispatcher] ${payload.category} alert prepared for ${payload.to.join(', ')}`);
             console.log(payload.text);
             return;
         }
-        const response = await fetch(this.webhookUrl, {
+        const response = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: {
+                Authorization: `Bearer ${this.resendApiKey}`,
                 'Content-Type': 'application/json',
-                ...(this.webhookToken
-                    ? { Authorization: `Bearer ${this.webhookToken}` }
-                    : {}),
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+                from: this.emailFrom,
+                to: payload.to,
+                subject: payload.subject,
+                text: payload.text,
+                html: payload.html,
+                reply_to: this.emailReplyTo,
+                tags: [
+                    { name: 'category', value: payload.category },
+                    { name: 'source', value: 'chainwill-monitor' },
+                ],
+            }),
         });
         if (!response.ok) {
-            throw new Error(`Alert webhook failed with ${response.status} ${response.statusText}`);
+            const body = await response.text();
+            throw new Error(`Resend request failed with ${response.status} ${response.statusText}: ${body}`);
         }
     }
 }
