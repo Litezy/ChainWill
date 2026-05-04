@@ -9,6 +9,7 @@ const viem_1 = require("viem");
 const db_1 = require("../config/db");
 const abi_1 = require("../config/abi");
 const web3_1 = require("../config/web3");
+const notificationQueue_1 = require("../queues/notificationQueue");
 const alertDispatcher_1 = require("../services/alertDispatcher");
 const chainWillAbi = (0, viem_1.parseAbi)(abi_1.CHAINWILL_ABI);
 class InactivityMonitorJob {
@@ -97,37 +98,49 @@ class InactivityMonitorJob {
             if (!attestationOpen && will.attestationAlertSentAt) {
                 updateData.attestationAlertSentAt = null;
             }
-            if (attestationOpen && !will.attestationAlertSentAt) {
+            if (!attestationOpen && will.attestationAlertEnqueuedAt) {
+                updateData.attestationAlertEnqueuedAt = null;
+            }
+            if (attestationOpen &&
+                !will.attestationAlertSentAt &&
+                !will.attestationAlertEnqueuedAt) {
                 const recipients = Array.from(new Set(will.signers
                     .map((signer) => alertDispatcher_1.alertDispatcher.resolveRecipientEmail({
                     address: signer.signerAddress,
                     email: signer.signerEmail,
                 }))
                     .filter((email) => Boolean(email))));
-                await alertDispatcher_1.alertDispatcher.sendAttestationOpenAlert({
+                await notificationQueue_1.notificationQueue.enqueue({
+                    type: 'attestation-open',
                     willId: will.id,
                     contractAddress: will.contractAddress,
                     recipients,
                 });
-                updateData.attestationAlertSentAt = new Date();
+                updateData.attestationAlertEnqueuedAt = new Date();
             }
             if (fundingReasons.length === 0 && will.fundingRiskAlertSentAt) {
                 updateData.fundingRiskAlertSentAt = null;
             }
-            if (fundingReasons.length > 0 && !will.fundingRiskAlertSentAt) {
+            if (fundingReasons.length === 0 && will.fundingRiskAlertEnqueuedAt) {
+                updateData.fundingRiskAlertEnqueuedAt = null;
+            }
+            if (fundingReasons.length > 0 &&
+                !will.fundingRiskAlertSentAt &&
+                !will.fundingRiskAlertEnqueuedAt) {
                 const ownerEmail = alertDispatcher_1.alertDispatcher.resolveRecipientEmail({
                     address: will.ownerAddress,
                     email: will.ownerEmail,
                 });
-                await alertDispatcher_1.alertDispatcher.sendFundingRiskAlert({
+                await notificationQueue_1.notificationQueue.enqueue({
+                    type: 'funding-risk',
                     willId: will.id,
                     contractAddress: will.contractAddress,
-                    recipient: ownerEmail ? [ownerEmail] : [],
+                    recipients: ownerEmail ? [ownerEmail] : [],
                     approvedAmount: will.approvedAmount,
                     ownerBalance: ownerBalanceString,
                     reasons: fundingReasons,
                 });
-                updateData.fundingRiskAlertSentAt = new Date();
+                updateData.fundingRiskAlertEnqueuedAt = new Date();
             }
             if (Object.keys(updateData).length > 0) {
                 await db_1.prisma.will.update({

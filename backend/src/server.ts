@@ -4,12 +4,16 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import willRoutes from './routes/will.routes';
+import { notificationQueue } from './queues/notificationQueue';
 import { web3EventService } from './services/web3EventService';
 import { prisma } from './config/db';
+import { notificationWorker } from './workers/notificationWorker';
 
 dotenv.config();
 
 const app = express();
+const shouldAutostartNotificationWorker =
+  process.env.NOTIFICATION_WORKER_AUTOSTART !== 'false';
 
 // Middleware
 app.use(helmet());
@@ -27,7 +31,10 @@ app.get('/health', (req, res) => {
     status: 'OK',
     message: 'ChainWill API is running',
     database: dbConnected ? 'connected' : 'disconnected',
-    web3Services: dbConnected && web3EventService.isHealthy() ? 'running' : 'stopped',
+    web3Services:
+      dbConnected && web3EventService.isHealthy() ? 'running' : 'stopped',
+    notifications:
+      dbConnected && notificationWorker.isHealthy() ? 'running' : 'stopped',
     timestamp: new Date().toISOString(),
   });
 });
@@ -54,6 +61,12 @@ const server = app.listen(PORT, async () => {
 
   if (dbConnected) {
     try {
+      if (shouldAutostartNotificationWorker) {
+        await notificationWorker.start();
+      } else {
+        console.log('[Server] Notification worker autostart disabled');
+      }
+
       // Start Web3 event listeners and background jobs only if DB is connected
       await web3EventService.start();
     } catch (error) {
@@ -71,6 +84,8 @@ process.on('SIGTERM', async () => {
   server.close(async () => {
     console.log('HTTP server closed');
     await web3EventService.stop();
+    await notificationWorker.stop();
+    await notificationQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
@@ -81,6 +96,8 @@ process.on('SIGINT', async () => {
   server.close(async () => {
     console.log('HTTP server closed');
     await web3EventService.stop();
+    await notificationWorker.stop();
+    await notificationQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
@@ -90,6 +107,8 @@ process.on('SIGINT', async () => {
 process.on('uncaughtException', async (error) => {
   console.error('Uncaught Exception:', error);
   await web3EventService.stop();
+  await notificationWorker.stop();
+  await notificationQueue.close();
   await prisma.$disconnect();
   process.exit(1);
 });
