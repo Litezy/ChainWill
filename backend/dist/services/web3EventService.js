@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.web3EventService = exports.Web3EventService = void 0;
 const approvalListener_1 = require("./approvalListener");
 const effectivePullAmount_1 = require("./effectivePullAmount");
+const monitor_1 = require("../jobs/monitor");
 /**
  * Service to manage all Web3 event listeners and background jobs
  */
@@ -22,6 +23,8 @@ class Web3EventService {
             await approvalListener_1.approvalListener.start();
             // Start effective pull amount updater
             await effectivePullAmount_1.effectivePullAmountService.start();
+            // Start fast inactivity monitor and alert engine
+            await monitor_1.inactivityMonitorJob.start();
             this.isRunning = true;
             console.log('[Web3EventService] All Web3 services started successfully');
         }
@@ -43,6 +46,7 @@ class Web3EventService {
         try {
             approvalListener_1.approvalListener.stop();
             effectivePullAmount_1.effectivePullAmountService.stop();
+            monitor_1.inactivityMonitorJob.stop();
             this.isRunning = false;
             console.log('[Web3EventService] All Web3 services stopped successfully');
         }

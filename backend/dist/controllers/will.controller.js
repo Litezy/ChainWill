@@ -5,7 +5,20 @@ exports.refreshEffectivePullAmount = refreshEffectivePullAmount;
 exports.getApprovalHistory = getApprovalHistory;
 const effectivePullAmount_1 = require("../services/effectivePullAmount");
 const db_1 = require("../config/db");
+function checkDatabaseConnection(res) {
+    const dbConnected = global.dbConnected || false;
+    if (!dbConnected) {
+        res.status(503).json({
+            error: 'Database unavailable. Please check your DATABASE_URL configuration.',
+            hint: 'For testing without a database, use mock endpoints.',
+        });
+        return false;
+    }
+    return true;
+}
 async function getWillDetails(req, res) {
+    if (!checkDatabaseConnection(res))
+        return;
     try {
         const rawWillId = req.params.willId;
         if (!rawWillId || Array.isArray(rawWillId)) {
@@ -34,6 +47,8 @@ async function getWillDetails(req, res) {
     }
 }
 async function refreshEffectivePullAmount(req, res) {
+    if (!checkDatabaseConnection(res))
+        return;
     try {
         const rawWillId = req.params.willId;
         if (!rawWillId || Array.isArray(rawWillId)) {
@@ -61,6 +76,8 @@ async function refreshEffectivePullAmount(req, res) {
     }
 }
 async function getApprovalHistory(req, res) {
+    if (!checkDatabaseConnection(res))
+        return;
     try {
         const rawWillId = req.params.willId;
         if (!rawWillId || Array.isArray(rawWillId)) {
