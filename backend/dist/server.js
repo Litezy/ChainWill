@@ -9,6 +9,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const will_routes_1 = __importDefault(require("./routes/will.routes"));
+const platform_routes_1 = __importDefault(require("./routes/platform.routes"));
 const notificationQueue_1 = require("./queues/notificationQueue");
 const web3EventService_1 = require("./services/web3EventService");
 const db_1 = require("./config/db");
@@ -23,6 +24,7 @@ app.use((0, morgan_1.default)('dev'));
 app.use(express_1.default.json());
 // Routes
 app.use('/api/wills', will_routes_1.default);
+app.use('/api/platform', platform_routes_1.default);
 // Health Check Endpoint
 app.get('/health', (req, res) => {
     const dbConnected = global.dbConnected || false;

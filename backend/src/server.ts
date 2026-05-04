@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import willRoutes from './routes/will.routes';
+import platformRoutes from './routes/platform.routes';
 import { notificationQueue } from './queues/notificationQueue';
 import { web3EventService } from './services/web3EventService';
 import { prisma } from './config/db';
@@ -23,6 +24,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/wills', willRoutes);
+app.use('/api/platform', platformRoutes);
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {

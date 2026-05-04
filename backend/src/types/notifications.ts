@@ -1,4 +1,7 @@
-export type AlertCategory = 'attestation-open' | 'funding-risk';
+export type AlertCategory =
+  | 'attestation-open'
+  | 'funding-risk'
+  | 'manual-check-in-reminder';
 
 export interface AlertEmailPayload {
   category: AlertCategory;
@@ -24,4 +27,11 @@ export type NotificationJobData =
       approvedAmount: string;
       ownerBalance: string;
       reasons: string[];
+    }
+  | {
+      type: 'manual-check-in-reminder';
+      willId: string;
+      contractAddress: string;
+      recipients: string[];
+      ownerAddress: string;
     };

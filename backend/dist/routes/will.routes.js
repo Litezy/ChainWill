@@ -6,5 +6,6 @@ const router = (0, express_1.Router)();
 // Get 
 router.get('/:willId/approval-history', will_controller_1.getApprovalHistory);
 router.post('/:willId/refresh-effective-amount', will_controller_1.refreshEffectivePullAmount);
+router.post('/:willAddress/notify', will_controller_1.notifyWillOwner);
 router.get('/:willId', will_controller_1.getWillDetails);
 exports.default = router;
