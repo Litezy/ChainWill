@@ -4,6 +4,7 @@ exports.effectivePullAmountService = exports.EffectivePullAmountService = void 0
 const web3_1 = require("../config/web3");
 const db_1 = require("../config/db");
 const abi_1 = require("../config/abi");
+const viem_1 = require("viem");
 // Minimal ABI for FundingModule to call getEffectivePullAmount
 // Using the complete ChainWill ABI interface
 /**
@@ -87,7 +88,7 @@ class EffectivePullAmountService {
             // Call getEffectivePullAmount on the will contract
             const effectiveAmount = await web3_1.viemClient.readContract({
                 address: will.contractAddress,
-                abi: abi_1.CHAINWILL_ABI,
+                abi: (0, viem_1.parseAbi)(abi_1.CHAINWILL_ABI),
                 functionName: 'getEffectivePullAmount',
             });
             const effectiveAmountStr = effectiveAmount.toString();
