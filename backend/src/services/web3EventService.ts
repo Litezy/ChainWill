@@ -1,5 +1,6 @@
 import { approvalListener } from './approvalListener';
 import { effectivePullAmountService } from './effectivePullAmount';
+import { inactivityMonitorJob } from '../jobs/monitor';
 
 /**
  * Service to manage all Web3 event listeners and background jobs
@@ -25,6 +26,9 @@ export class Web3EventService {
       // Start effective pull amount updater
       await effectivePullAmountService.start();
 
+      // Start fast inactivity monitor and alert engine
+      await inactivityMonitorJob.start();
+
       this.isRunning = true;
       console.log('[Web3EventService] All Web3 services started successfully');
     } catch (error) {
@@ -48,6 +52,7 @@ export class Web3EventService {
     try {
       approvalListener.stop();
       effectivePullAmountService.stop();
+      inactivityMonitorJob.stop();
       this.isRunning = false;
       console.log('[Web3EventService] All Web3 services stopped successfully');
     } catch (error) {
