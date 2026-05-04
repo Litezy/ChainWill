@@ -43,10 +43,6 @@ export class Web3EventService {
    * Stop all services gracefully
    */
   async stop(): Promise<void> {
-    if (!this.isRunning) {
-      return;
-    }
-
     console.log('[Web3EventService] Stopping all Web3 services...');
 
     try {
@@ -65,6 +61,16 @@ export class Web3EventService {
    */
   isHealthy(): boolean {
     return this.isRunning;
+  }
+
+  getStatus(): {
+    running: boolean;
+    inactivityMonitor: ReturnType<typeof inactivityMonitorJob.getStatus>;
+  } {
+    return {
+      running: this.isRunning,
+      inactivityMonitor: inactivityMonitorJob.getStatus(),
+    };
   }
 }
 
