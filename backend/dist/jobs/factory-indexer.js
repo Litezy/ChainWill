@@ -60,7 +60,12 @@ class FactoryIndexer {
             return;
         }
         const existingEvent = await db_1.prisma.eventLog.findUnique({
-            where: { txHash: log.transactionHash },
+            where: {
+                txHash_logIndex: {
+                    txHash: log.transactionHash,
+                    logIndex: log.logIndex,
+                },
+            },
         });
         if (existingEvent) {
             return;
@@ -119,6 +124,7 @@ class FactoryIndexer {
                     willAddress,
                     eventName: 'WillCreated',
                     txHash: log.transactionHash,
+                    logIndex: log.logIndex,
                     blockNumber: Number(log.blockNumber),
                     timestamp: blockTimestamp,
                     data: {

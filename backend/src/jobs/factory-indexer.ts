@@ -65,7 +65,7 @@ export class FactoryIndexer {
     });
 
     for (const log of logs) {
-      await this.processWillCreated(log as typeof log & { args?: WillCreatedArgs });
+      await this.processWillCreated(log as typeof log & { args?: WillCreatedArgs; logIndex: number });
     }
 
     this.lastProcessedBlock = toBlock;
@@ -74,6 +74,7 @@ export class FactoryIndexer {
   private async processWillCreated(log: {
     args?: WillCreatedArgs;
     blockNumber: bigint;
+    logIndex: number;
     transactionHash: `0x${string}`;
   }): Promise<void> {
     const willAddress = log.args?.will?.toLowerCase();
@@ -86,7 +87,12 @@ export class FactoryIndexer {
     }
 
     const existingEvent = await prisma.eventLog.findUnique({
-      where: { txHash: log.transactionHash },
+      where: {
+        txHash_logIndex: {
+          txHash: log.transactionHash,
+          logIndex: log.logIndex,
+        },
+      },
     });
     if (existingEvent) {
       return;
@@ -153,6 +159,7 @@ export class FactoryIndexer {
           willAddress,
           eventName: 'WillCreated',
           txHash: log.transactionHash,
+          logIndex: log.logIndex,
           blockNumber: Number(log.blockNumber),
           timestamp: blockTimestamp,
           data: {

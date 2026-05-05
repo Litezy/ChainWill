@@ -92,6 +92,7 @@ export class WillIndexer {
         address: `0x${string}`;
         args?: Record<string, unknown>;
         blockNumber: bigint;
+        logIndex: number;
         transactionHash: `0x${string}`;
       }>;
 
@@ -101,6 +102,7 @@ export class WillIndexer {
           willAddress: log.address.toLowerCase(),
           args: log.args || {},
           blockNumber: log.blockNumber,
+          logIndex: log.logIndex,
           transactionHash: log.transactionHash,
         });
       }
@@ -114,10 +116,16 @@ export class WillIndexer {
     willAddress: string;
     args: Record<string, unknown>;
     blockNumber: bigint;
+    logIndex: number;
     transactionHash: `0x${string}`;
   }): Promise<void> {
     const existingEvent = await prisma.eventLog.findUnique({
-      where: { txHash: log.transactionHash },
+      where: {
+        txHash_logIndex: {
+          txHash: log.transactionHash,
+          logIndex: log.logIndex,
+        },
+      },
     });
     if (existingEvent) {
       return;
@@ -282,6 +290,7 @@ export class WillIndexer {
           willAddress: log.willAddress,
           eventName: log.eventName,
           txHash: log.transactionHash,
+          logIndex: log.logIndex,
           blockNumber: Number(log.blockNumber),
           timestamp: blockTimestamp,
           data: this.serializeArgs(log.args),

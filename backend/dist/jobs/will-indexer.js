@@ -72,6 +72,7 @@ class WillIndexer {
                     willAddress: log.address.toLowerCase(),
                     args: log.args || {},
                     blockNumber: log.blockNumber,
+                    logIndex: log.logIndex,
                     transactionHash: log.transactionHash,
                 });
             }
@@ -80,7 +81,12 @@ class WillIndexer {
     }
     async processChildWillEvent(log) {
         const existingEvent = await db_1.prisma.eventLog.findUnique({
-            where: { txHash: log.transactionHash },
+            where: {
+                txHash_logIndex: {
+                    txHash: log.transactionHash,
+                    logIndex: log.logIndex,
+                },
+            },
         });
         if (existingEvent) {
             return;
@@ -227,6 +233,7 @@ class WillIndexer {
                     willAddress: log.willAddress,
                     eventName: log.eventName,
                     txHash: log.transactionHash,
+                    logIndex: log.logIndex,
                     blockNumber: Number(log.blockNumber),
                     timestamp: blockTimestamp,
                     data: this.serializeArgs(log.args),
