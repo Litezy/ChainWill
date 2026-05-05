@@ -1,3 +1,4 @@
+import Admin from "@/pages/Admin/Admin";
 import Assets from "@/pages/Dashboard/Assets";
 import Beneficiaries from "@/pages/Dashboard/Beneficiaries";
 import Overview from "@/pages/Dashboard/Overview";
@@ -6,6 +7,7 @@ import Signers from "@/pages/Dashboard/Signers";
 
 import About from "@/pages/General/About";
 import ClaimInheritance from "@/pages/General/ClaimInheritance";
+import CreateNewWill from "@/pages/General/CreateNewWill";
 import Home from "@/pages/General/Home";
 import HowItWorks from "@/pages/General/HowItWorks";
 import PrivacyPolicy from "@/pages/General/PrivacyPolicy";
@@ -21,6 +23,8 @@ export const GeneralPages = [
 
 export const StandalonePages = [
   { path: "/claim-inheritance/:email", component: ClaimInheritance },
+  {path: "/create-will", component: CreateNewWill },
+  {path: "/admin", component: Admin },
 ];
 
 export const DashboardPages = [

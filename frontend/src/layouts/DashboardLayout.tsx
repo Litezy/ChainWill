@@ -2,7 +2,7 @@ import React, { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import Sidebar, { dashboardNavItems } from '@/components/dashboard/Sidebar';
-import CreateNewWill from '@/modals/CreateNewWill';
+import CreateNewWill from '@/pages/General/CreateNewWill';
 
 interface DashboardLayoutProps {
   children: ReactNode;
