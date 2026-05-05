@@ -69,10 +69,13 @@ model EventLog {
   id          String   @id @default(uuid())
   willAddress String   // Which will emitted this
   eventName   String
-  txHash      String   @unique
+  txHash      String
+  logIndex    Int      @default(0)
   blockNumber Int
   data        Json
   timestamp   DateTime @default(now())
+
+  @@unique([txHash, logIndex])
 }
 
 model Erc20Approval {
