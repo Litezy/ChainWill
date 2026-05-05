@@ -13,8 +13,10 @@ const beneficiary_routes_1 = __importDefault(require("./routes/beneficiary.route
 const signer_routes_1 = __importDefault(require("./routes/signer.routes"));
 const web3EventService_1 = require("./services/web3EventService");
 const db_1 = require("./config/db");
+const notificationWorker_1 = require("./workers/notificationWorker");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
+const shouldAutostartNotificationWorker = process.env.NOTIFICATION_WORKER_AUTOSTART !== 'false';
 // Middleware
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)());
@@ -72,6 +74,8 @@ process.on('SIGTERM', async () => {
     server.close(async () => {
         console.log('HTTP server closed');
         await web3EventService_1.web3EventService.stop();
+        await notificationWorker_1.notificationWorker.stop();
+        await notificationQueue_1.notificationQueue.close();
         await db_1.prisma.$disconnect();
         process.exit(0);
     });
@@ -81,6 +85,8 @@ process.on('SIGINT', async () => {
     server.close(async () => {
         console.log('HTTP server closed');
         await web3EventService_1.web3EventService.stop();
+        await notificationWorker_1.notificationWorker.stop();
+        await notificationQueue_1.notificationQueue.close();
         await db_1.prisma.$disconnect();
         process.exit(0);
     });
@@ -89,6 +95,8 @@ process.on('SIGINT', async () => {
 process.on('uncaughtException', async (error) => {
     console.error('Uncaught Exception:', error);
     await web3EventService_1.web3EventService.stop();
+    await notificationWorker_1.notificationWorker.stop();
+    await notificationQueue_1.notificationQueue.close();
     await db_1.prisma.$disconnect();
     process.exit(1);
 });

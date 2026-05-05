@@ -28,6 +28,8 @@ class Web3EventService {
             await approvalListener_1.approvalListener.start();
             // Start effective pull amount updater
             await effectivePullAmount_1.effectivePullAmountService.start();
+            // Start fast inactivity monitor and alert engine
+            await monitor_1.inactivityMonitorJob.start();
             this.isRunning = true;
             console.log('[Web3EventService] All Web3 services started successfully');
         }
@@ -42,15 +44,13 @@ class Web3EventService {
      * Stop all services gracefully
      */
     async stop() {
-        if (!this.isRunning) {
-            return;
-        }
         console.log('[Web3EventService] Stopping all Web3 services...');
         try {
             approvalListener_1.approvalListener.stop();
             factory_indexer_1.factoryIndexer.stop();
             will_indexer_1.willIndexer.stop();
             effectivePullAmount_1.effectivePullAmountService.stop();
+            monitor_1.inactivityMonitorJob.stop();
             this.isRunning = false;
             console.log('[Web3EventService] All Web3 services stopped successfully');
         }
@@ -63,6 +63,12 @@ class Web3EventService {
      */
     isHealthy() {
         return this.isRunning;
+    }
+    getStatus() {
+        return {
+            running: this.isRunning,
+            inactivityMonitor: monitor_1.inactivityMonitorJob.getStatus(),
+        };
     }
 }
 exports.Web3EventService = Web3EventService;

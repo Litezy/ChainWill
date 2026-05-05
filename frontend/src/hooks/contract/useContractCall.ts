@@ -1,7 +1,10 @@
 import { errorMessage } from "@/utils/messageStatus"
 import { useContract } from "./useContract"
 
-export const useCallContract = (type: "factory" | "child", childAddress?: string) => {
+export const useCallContract = (
+  type: "factory" | "child" | "erc20",
+  childAddress?: string
+) => {
   const readContract = useContract({
     type,
     withSigner: false,

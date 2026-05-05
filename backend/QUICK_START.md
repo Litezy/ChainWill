@@ -4,6 +4,7 @@
 
 - Node.js 18+
 - PostgreSQL database
+- Redis instance (local or managed)
 - Sepolia testnet RPC endpoint
 - Environment variables configured
 
@@ -29,6 +30,17 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/chainwill
 DIRECT_URL=postgresql://user:pass@localhost:5432/chainwill
 RPC_URL=https://rpc.sepolia.org
 CWT_ADDRESS=0x9b068dC0418064C11d9bc563edC26890DD95a60e
+ADMIN_PRIVATE_KEY=0xyour_admin_private_key_here
+REDIS_URL=redis://127.0.0.1:6379
+```
+
+`ADMIN_PRIVATE_KEY` must be the same admin/deployer key that the will contracts
+expect for `triggerByTime()`. The inactivity relayer will not start without it.
+
+**Email delivery variables:**
+```env
+RESEND_API_KEY=re_xxxxxxxxx
+ALERT_EMAIL_FROM=ChainWill <onboarding@resend.dev>
 ```
 
 ### 3. Initialize Database
@@ -64,9 +76,24 @@ npm start
 
 The server will:
 - Start on the configured PORT (default: 8000)
+- Start the BullMQ notification worker unless `NOTIFICATION_WORKER_AUTOSTART=false`
 - Initialize ApprovalListenerService (polls every 30s)
 - Initialize EffectivePullAmountService (updates every 60s)
+- Initialize the admin relayer cron job (runs every 60s and opens attestation windows)
+- Initialize NotificationWorker for queued emails
 - Be ready to accept API requests
+
+If you want the worker in a separate process:
+
+```bash
+npm run dev:notifications
+```
+
+Then set:
+
+```env
+NOTIFICATION_WORKER_AUTOSTART=false
+```
 
 ## Testing the Implementation
 
@@ -80,7 +107,11 @@ Expected response:
 {
   "status": "OK",
   "message": "ChainWill API is running",
-  "web3Services": "running"
+  "web3Services": "running",
+  "relayer": {
+    "running": true,
+    "configured": true
+  }
 }
 ```
 
@@ -113,6 +144,8 @@ curl -X POST http://localhost:8000/api/wills/{willId}/refresh-effective-amount
 All services log with prefixes:
 - `[ApprovalListener]` - Approval event detection
 - `[EffectivePullAmount]` - Amount calculations
+- `[NotificationQueue]` - Queueing alerts into Redis
+- `[NotificationWorker]` - Processing queued email jobs
 - `[Web3EventService]` - Service lifecycle
 
 Example:
@@ -208,6 +241,7 @@ CMD ["npm", "start"]
 3. Enable application monitoring (better logs, metrics)
 4. Set up alerts for service failures
 5. Configure horizontal scaling if needed
+6. Provision Redis and Resend before enabling email delivery in production
 
 ## Next Steps
 

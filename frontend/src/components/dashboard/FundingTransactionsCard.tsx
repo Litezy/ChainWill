@@ -1,19 +1,8 @@
-interface Transaction {
-  event: string;
-  asset: string;
-  amount: string;
-  status: 'success' | 'revoked';
-  date: string;
-}
-
-const transactions: Transaction[] = [
-  { event: 'Approval update', asset: 'USDC', amount: '+45,000.00', status: 'success', date: 'Apr 25' },
-  { event: 'Limit refresh', asset: 'WETH', amount: '24.50', status: 'success', date: 'Apr 24' },
-  { event: 'New grant', asset: 'USDC', amount: '+97,500.00', status: 'success', date: 'Apr 23' },
-  { event: 'Revocation', asset: 'DAI', amount: '-10,000.00', status: 'revoked', date: 'Apr 22' },
-];
+import { useTokenApprovalStore } from "@/stores/tokenApprovalStore";
 
 export default function FundingTransactionsCard() {
+  const transactions = useTokenApprovalStore((state) => state.history);
+
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -38,25 +27,33 @@ export default function FundingTransactionsCard() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {transactions.map((transaction) => (
-              <tr key={transaction.event + transaction.date} className="hover:bg-slate-50">
-                <td className="px-4 py-4 font-semibold text-slate-950">{transaction.event}</td>
-                <td className="px-4 py-4">{transaction.asset}</td>
-                <td className="px-4 py-4 text-slate-950">{transaction.amount}</td>
-                <td className="px-4 py-4">
-                  <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                      transaction.status === 'success'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-rose-100 text-rose-700'
-                    }`}
-                  >
-                    {transaction.status === 'success' ? 'Success' : 'Revoked'}
-                  </span>
+            {transactions.length > 0 ? (
+              transactions.map((transaction) => (
+                <tr key={transaction.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-4 font-semibold text-slate-950">{transaction.event}</td>
+                  <td className="px-4 py-4">{transaction.asset}</td>
+                  <td className="px-4 py-4 text-slate-950">{Number(transaction.amount).toLocaleString()}</td>
+                  <td className="px-4 py-4">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        transaction.status === 'success'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      {transaction.status === 'success' ? 'Success' : 'Revoked'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-slate-500">{transaction.date}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                  No CWT approval transactions yet.
                 </td>
-                <td className="px-4 py-4 text-slate-500">{transaction.date}</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

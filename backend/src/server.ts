@@ -12,6 +12,8 @@ import { prisma } from './config/db';
 dotenv.config();
 
 const app = express();
+const shouldAutostartNotificationWorker =
+  process.env.NOTIFICATION_WORKER_AUTOSTART !== 'false';
 
 // Middleware
 app.use(helmet());
@@ -27,11 +29,23 @@ app.use('/api/signer', signerRoutes);
 // Health Check Endpoint
 app.get('/health', (req, res) => {
   const dbConnected = (global as any).dbConnected || false;
+  const web3Status = web3EventService.getStatus();
   res.status(200).json({
     status: 'OK',
     message: 'ChainWill API is running',
     database: dbConnected ? 'connected' : 'disconnected',
-    web3Services: dbConnected && web3EventService.isHealthy() ? 'running' : 'stopped',
+    web3Services:
+      dbConnected && web3EventService.isHealthy() ? 'running' : 'stopped',
+    relayer: dbConnected
+      ? web3Status.inactivityMonitor
+      : {
+          running: false,
+          configured: false,
+          relayerAddress: null,
+          lastCompletedAt: null,
+        },
+    notifications:
+      dbConnected && notificationWorker.isHealthy() ? 'running' : 'stopped',
     timestamp: new Date().toISOString(),
   });
 });
@@ -58,6 +72,12 @@ const server = app.listen(PORT, async () => {
 
   if (dbConnected) {
     try {
+      if (shouldAutostartNotificationWorker) {
+        await notificationWorker.start();
+      } else {
+        console.log('[Server] Notification worker autostart disabled');
+      }
+
       // Start Web3 event listeners and background jobs only if DB is connected
       await web3EventService.start();
     } catch (error) {
@@ -75,6 +95,8 @@ process.on('SIGTERM', async () => {
   server.close(async () => {
     console.log('HTTP server closed');
     await web3EventService.stop();
+    await notificationWorker.stop();
+    await notificationQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
@@ -85,6 +107,8 @@ process.on('SIGINT', async () => {
   server.close(async () => {
     console.log('HTTP server closed');
     await web3EventService.stop();
+    await notificationWorker.stop();
+    await notificationQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });

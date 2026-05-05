@@ -2,12 +2,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useWillOwner } from '@/hooks/child/useWillOwner'
+import { useState } from 'react'
 
 export default function Header() {
   const location  = useLocation()
   const pathname  = location.pathname
   const navigate  = useNavigate()
   const { address, isConnected } = useAccount()
+  const [modalOpen, setModalOpen] = useState(false)
   const { ownsWill, isLoading: isCheckingWill } = useWillOwner(address)
 
   const navItems = [

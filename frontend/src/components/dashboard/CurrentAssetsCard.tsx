@@ -1,9 +1,23 @@
-const currentAssets = [
-  { symbol: 'USDC', amount: '142,500.00', label: 'USDC' },
-  { symbol: 'WETH', amount: '26,700.00', label: 'WETH' },
-];
+import { useWillStatusStore } from "@/stores/willStatusStore";
+import { formatCwtAmount } from "@/utils/willStatus";
 
-export default function CurrentAssetsCard() {
+type CurrentAssetsCardProps = {
+  isLoading?: boolean;
+};
+
+export default function CurrentAssetsCard({
+  isLoading = false,
+}: CurrentAssetsCardProps) {
+  const ownerWalletBalance = useWillStatusStore((state) => state.ownerWalletBalance);
+
+  const currentAssets = [
+    {
+      symbol: 'CWT',
+      amount: isLoading ? 'Loading...' : formatCwtAmount(ownerWalletBalance),
+      label: 'ChainWill Token',
+    },
+  ];
+
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -25,7 +39,7 @@ export default function CurrentAssetsCard() {
                 <p className="text-sm text-slate-500">{asset.label}</p>
               </div>
             </div>
-            <p className="text-sm font-semibold text-slate-950">${asset.amount}</p>
+            <p className="text-sm font-semibold text-slate-950">{asset.amount}</p>
           </div>
         ))}
       </div>

@@ -12,6 +12,7 @@ model Will {
   id                    String    @id @default(uuid())
   contractAddress       String    @unique // The actual deployed ChainWill address
   ownerAddress          String
+  ownerEmail            String?
   tokenAddress          String
   
   // Funding tracking (v2 Dispatcher Model)
@@ -26,11 +27,16 @@ model Will {
   lastCheckIn           DateTime
   
   // Status
+  attestationOpen       Boolean   @default(false)
   isTriggered           Boolean   @default(false)
   isLocked              Boolean   @default(false)
   attestationOpen       Boolean   @default(false)
   triggeredAt           DateTime?
   pendingRecoveryWallet String?   // Set during wallet recovery requests
+  attestationAlertEnqueuedAt DateTime?
+  attestationAlertSentAt DateTime?
+  fundingRiskAlertEnqueuedAt DateTime?
+  fundingRiskAlertSentAt DateTime?
   
   createdAt             DateTime  @default(now())
   createdTxHash         String?
@@ -59,6 +65,7 @@ model Signer {
   id            String    @id @default(uuid())
   willId        String
   signerAddress String
+  signerEmail   String?
   hasSigned     Boolean   @default(false)
   replacedAt    DateTime? // Track if owner swapped them out
 

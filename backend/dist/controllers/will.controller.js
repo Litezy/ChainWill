@@ -10,6 +10,7 @@ exports.getSignerWills = getSignerWills;
 exports.getWillDetails = getWillDetails;
 exports.refreshEffectivePullAmount = refreshEffectivePullAmount;
 exports.getApprovalHistory = getApprovalHistory;
+exports.notifyWillOwner = notifyWillOwner;
 const effectivePullAmount_1 = require("../services/effectivePullAmount");
 const db_1 = require("../config/db");
 const will_service_1 = require("../services/will.service");
@@ -221,5 +222,58 @@ async function getApprovalHistory(req, res) {
     catch (error) {
         console.error('[WillController] Error fetching approval history:', error);
         return res.status(500).json({ error: 'Failed to fetch approval history' });
+    }
+}
+function isValidAddress(value) {
+    return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+async function notifyWillOwner(req, res) {
+    if (!checkDatabaseConnection(res))
+        return;
+    try {
+        const rawWillAddress = req.params.willAddress;
+        if (!rawWillAddress || Array.isArray(rawWillAddress)) {
+            return res.status(400).json({ error: 'Invalid willAddress' });
+        }
+        if (!isValidAddress(rawWillAddress)) {
+            return res.status(400).json({ error: 'willAddress must be a valid EVM address' });
+        }
+        const will = await db_1.prisma.will.findFirst({
+            where: {
+                contractAddress: {
+                    equals: rawWillAddress,
+                    mode: 'insensitive',
+                },
+            },
+        });
+        if (!will) {
+            return res.status(404).json({ error: 'Will not found' });
+        }
+        const ownerEmail = alertDispatcher_1.alertDispatcher.resolveRecipientEmail({
+            address: will.ownerAddress,
+            email: will.ownerEmail,
+        });
+        if (!ownerEmail) {
+            return res.status(400).json({
+                error: 'Owner email is not available for this will',
+            });
+        }
+        await notificationQueue_1.notificationQueue.enqueue({
+            type: 'manual-check-in-reminder',
+            willId: will.id,
+            contractAddress: will.contractAddress,
+            recipients: [ownerEmail],
+            ownerAddress: will.ownerAddress,
+        });
+        return res.status(202).json({
+            message: 'Check-in reminder queued',
+            willId: will.id,
+            willAddress: will.contractAddress,
+            recipient: ownerEmail,
+        });
+    }
+    catch (error) {
+        console.error('[WillController] Error queueing manual check-in reminder:', error);
+        return res.status(500).json({ error: 'Failed to queue check-in reminder' });
     }
 }
