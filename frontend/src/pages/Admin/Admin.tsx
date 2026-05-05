@@ -121,7 +121,7 @@ const AdminDashboard = () => {
 
       loadingMessage("Triggering will by time...");
 
-      const success = await callWriteFunction("triggerByTime", [], gas);
+      const {success} = await callWriteFunction("triggerByTime", [], gas);
       if (!success) return;
 
       successMessage("Will triggered successfully. Signers can now attest.");

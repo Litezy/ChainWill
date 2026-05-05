@@ -10,7 +10,7 @@ const GenePageLayout: React.FC<GenePageLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen  flex flex-col w-full">
       <Header />
-      <main className="flex- pt-8 ">
+      <main className="flex- pt-5 ">
         {children}
       </main>
       <Footer />

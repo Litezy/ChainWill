@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { parseUnits } from "ethers";
 import { useAccount } from "wagmi";
 
-import { CHAINWILL_CONTRACT, CHAINWILL_TOKEN_CONTRACT_ADDRESS } from "@/constants/contract";
+import { CHAINWILL_TOKEN_CONTRACT_ADDRESS } from "@/constants/contract";
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
 import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
@@ -16,9 +16,11 @@ import {
   loadingMessage,
   successMessage,
 } from "@/utils/messageStatus";
+import { useContractStore } from "@/stores/contractStore";
 
 export default function TokenApprovalCard() {
   const { address } = useAccount();
+  const storedAddress = useContractStore((s) => s.contractAddress);
   const { callReadFunction } = useCallReadMethods("erc20", CHAINWILL_TOKEN_CONTRACT_ADDRESS);
   const { callWriteFunction } = useCallWriteMethods("erc20", CHAINWILL_TOKEN_CONTRACT_ADDRESS);
   const { estimateGas } = useGasEstimator("erc20", CHAINWILL_TOKEN_CONTRACT_ADDRESS);
@@ -31,7 +33,7 @@ export default function TokenApprovalCard() {
 
   useTokenAllowance({
     tokenAddress: CHAINWILL_TOKEN_CONTRACT_ADDRESS,
-    spenderAddress: CHAINWILL_CONTRACT,
+    spenderAddress: storedAddress,
   });
 
   const selectedTokenLabel = useMemo(() => "CWT (ChainWill Token)", []);
@@ -67,13 +69,13 @@ export default function TokenApprovalCard() {
       }
 
       const parsedAmount = parseUnits(normalizedAmount, Number(decimalsResult));
-      const gas = await estimateGas("approve", [CHAINWILL_CONTRACT, parsedAmount]);
+      const gas = await estimateGas("approve", [storedAddress, parsedAmount]);
 
       if (!gas) {
         return;
       }
 
-      const isApproved = await callWriteFunction("approve", [CHAINWILL_CONTRACT, parsedAmount], gas);
+      const isApproved = await callWriteFunction("approve", [storedAddress, parsedAmount], gas);
 
       if (!isApproved) {
         return;
@@ -81,21 +83,21 @@ export default function TokenApprovalCard() {
 
       setStoredAllowance(
         CHAINWILL_TOKEN_CONTRACT_ADDRESS,
-        CHAINWILL_CONTRACT,
+        storedAddress,
         normalizedAmount
       );
       setApprovedToken(
         CHAINWILL_TOKEN_CONTRACT_ADDRESS,
         "CWT",
         normalizedAmount,
-        CHAINWILL_CONTRACT
+        storedAddress
       );
       addApprovalHistory({
         id: `${Date.now()}`,
         event: "Approval update",
         asset: "CWT",
         tokenAddress: CHAINWILL_TOKEN_CONTRACT_ADDRESS,
-        spender: CHAINWILL_CONTRACT,
+        spender: storedAddress,
         amount: normalizedAmount,
         status: "success",
         date: new Date().toLocaleDateString("en-US", {

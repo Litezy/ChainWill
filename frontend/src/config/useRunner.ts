@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useAccount, useWalletClient } from "wagmi"
-import { BrowserProvider, JsonRpcSigner } from "ethers"
+import { BrowserProvider, JsonRpcSigner, type Eip1193Provider } from "ethers"
 import { readProvider } from "@/lib/ethers"
 
 const useRunners = () => {
@@ -11,7 +11,7 @@ const useRunners = () => {
 
   const provider = useMemo(() => {
     if (!walletClient) return null
-    return new BrowserProvider(walletClient.transport)
+    return new BrowserProvider(walletClient.transport as unknown as Eip1193Provider)
   }, [walletClient])
 
   useEffect(() => {
