@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.web3EventService = exports.Web3EventService = void 0;
 const approvalListener_1 = require("./approvalListener");
 const effectivePullAmount_1 = require("./effectivePullAmount");
+const factory_indexer_1 = require("../jobs/factory-indexer");
+const will_indexer_1 = require("../jobs/will-indexer");
 /**
  * Service to manage all Web3 event listeners and background jobs
  */
@@ -18,6 +20,10 @@ class Web3EventService {
         }
         try {
             console.log('[Web3EventService] Starting all Web3 services...');
+            // Start factory indexer first so newly created wills are available for child listeners
+            await factory_indexer_1.factoryIndexer.start();
+            // Start child will event indexer
+            await will_indexer_1.willIndexer.start();
             // Start approval listener
             await approvalListener_1.approvalListener.start();
             // Start effective pull amount updater
@@ -42,6 +48,8 @@ class Web3EventService {
         console.log('[Web3EventService] Stopping all Web3 services...');
         try {
             approvalListener_1.approvalListener.stop();
+            factory_indexer_1.factoryIndexer.stop();
+            will_indexer_1.willIndexer.stop();
             effectivePullAmount_1.effectivePullAmountService.stop();
             this.isRunning = false;
             console.log('[Web3EventService] All Web3 services stopped successfully');

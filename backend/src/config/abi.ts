@@ -1,9 +1,13 @@
 import dotenv from 'dotenv';
+import { parseAbi } from 'viem';
 
 dotenv.config();
 
 export const CWT_ADDRESS = (process.env.CWT_ADDRESS ||
   '0x9b068dC0418064C11d9bc563edC26890DD95a60e').toLowerCase() as `0x${string}`;
+
+export const FACTORY_ADDRESS = (process.env.FACTORY_ADDRESS ||
+  '0x8ea15250e4fA0924900C622a4dd5694f0B4f52E7').toLowerCase() as `0x${string}`;
 
 // ===== CWT ABI =====
 export const CWT_ABI = [
@@ -93,3 +97,6 @@ export const CHAINWILL_ABI = [
   "function remainingPercent() view returns (uint256)",
   "function timeUntilTrigger() view returns (uint256)"
 ] as const;
+
+export const FACTORY_PARSED_ABI = parseAbi(FACTORY_ABI);
+export const CHAINWILL_PARSED_ABI = parseAbi(CHAINWILL_ABI);

@@ -28,6 +28,7 @@ model Will {
   // Status
   isTriggered           Boolean   @default(false)
   isLocked              Boolean   @default(false)
+  attestationOpen       Boolean   @default(false)
   triggeredAt           DateTime?
   pendingRecoveryWallet String?   // Set during wallet recovery requests
   
