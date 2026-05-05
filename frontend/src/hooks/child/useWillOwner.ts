@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { usePublicClient } from 'wagmi';
-import { FACTORY_CONTRACT_ADDRESS, FACTORY_ABI } from '@/constants/contract';
+import { FACTORY_CONTRACT_ADDRESS} from '@/constants/contract';
+import FACTORY_ABI  from "@/ABI/factoryAbi"
 
 /**
  * Hook to check if a user owns any wills

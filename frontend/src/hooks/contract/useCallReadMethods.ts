@@ -3,7 +3,10 @@ import { errorMessage } from "@/utils/messageStatus";
 import { useCallContract } from "./useContractCall";
 
 
-export const useCallReadMethods = (type:"factory" | "child", childAddress?: string) => {
+export const useCallReadMethods = (
+    type:"factory" | "child" | "erc20",
+    childAddress?: string
+) => {
     const { assertContract, readContract } = useCallContract(type, childAddress)
 
     const callReadFunction = async (method: string, args: any[]): Promise<any | null> => {
