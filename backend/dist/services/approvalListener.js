@@ -86,6 +86,12 @@ class ApprovalListenerService {
             const spender = log.args.spender;
             const value = log.args.value;
             try {
+                const existingEvent = await db_1.prisma.eventLog.findUnique({
+                    where: { txHash: log.transactionHash },
+                });
+                if (existingEvent) {
+                    continue;
+                }
                 // Find all wills with this spender address (will contract address)
                 const wills = await db_1.prisma.will.findMany({
                     where: {

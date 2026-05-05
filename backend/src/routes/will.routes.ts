@@ -1,17 +1,28 @@
 import { Router } from 'express';
 import {
+  getWillBeneficiaries,
+  getWillByAddress,
   getWillDetails,
+  getWillsByOwner,
+  getWillSigners,
+  getWillStatus,
   refreshEffectivePullAmount,
   getApprovalHistory,
 } from '../controllers/will.controller';
 
 const router = Router();
 
-// Get 
-router.get('/:willId/approval-history', getApprovalHistory);
+router.get('/address/:willAddress/status', getWillStatus);
+router.get('/address/:willAddress', getWillByAddress);
 
-router.post('/:willId/refresh-effective-amount', refreshEffectivePullAmount);
+router.get('/id/:willId/approval-history', getApprovalHistory);
 
-router.get('/:willId', getWillDetails);
+router.post('/id/:willId/refresh-effective-amount', refreshEffectivePullAmount);
+
+router.get('/:willAddress/beneficiaries', getWillBeneficiaries);
+router.get('/:willAddress/signers', getWillSigners);
+
+router.get('/id/:willId', getWillDetails);
+router.get('/:ownerAddress', getWillsByOwner);
 
 export default router;
