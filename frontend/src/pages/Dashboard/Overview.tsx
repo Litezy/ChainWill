@@ -1,11 +1,45 @@
+import { useEffect, useState } from 'react';
 import { ArrowUpRight, ShieldCheck, Clock3 } from 'lucide-react';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import AssetDistributionCard from '@/components/dashboard/AssetDistributionCard';
 import AllocationTable from '@/components/dashboard/AllocationTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import CheckinButton from '@/components/ui/CheckinButton';
+import { useWillStatus } from '@/hooks/child/useWillStatus';
+import { useWillStatusStore } from '@/stores/willStatusStore';
+import { formatCwtAmount, getPrimaryTriggerCountdown } from '@/utils/willStatus';
 
 const Overview: React.FC = () => {
+  useWillStatus();
+  const [now, setNow] = useState(Date.now());
+  const isLoading = useWillStatusStore((state) => state.isLoading);
+  const effectivePullAmount = useWillStatusStore((state) => state.effectivePullAmount);
+  const timeRemaining = useWillStatusStore((state) => state.timeRemaining);
+  const attestationOpensAt = useWillStatusStore((state) => state.attestationOpensAt);
+  const triggerUnlocksAt = useWillStatusStore((state) => state.triggerUnlocksAt);
+  const triggered = useWillStatusStore((state) => state.triggered);
+  const locked = useWillStatusStore((state) => state.locked);
+  const lastUpdatedAt = useWillStatusStore((state) => state.lastUpdatedAt);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const triggerCountdown = getPrimaryTriggerCountdown({
+    timeRemaining,
+    attestationOpensAt,
+    triggerUnlocksAt,
+    triggered,
+    lastUpdatedAt,
+    nowMs: now,
+  });
+
   return (
     <div className="mx-auto min-h-screen max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <section className="rounded-[32px]  ">
@@ -30,25 +64,17 @@ const Overview: React.FC = () => {
       <div className="grid gap-3 xl:grid-cols-[1fr_1fr_0.94fr]">
         <MetricCard
           title="Effective Pull Amount"
-          value="$1,240,500.00"
-          caption="Calculated estate liquidity available for execution."
-          accent="+4.2% since last month"
+          value={isLoading ? "Loading..." : `${formatCwtAmount(effectivePullAmount)} CWT`}
+          caption="Amount the will can effectively pull from the owner's wallet right now."
           icon={<ShieldCheck className="h-5 w-5" />}
         />
 
         <MetricCard
           title="Trigger Countdown"
-          value="178 Days"
-          caption="Next mandatory check-in before grace period begins."
+          value={isLoading ? "Loading..." : triggerCountdown.label}
+          caption={triggerCountdown.caption}
+          accent={locked ? "Locked" : triggerCountdown.accent}
           icon={<Clock3 className="h-5 w-5" />}
-          footer={
-            <div className="space-y-3">
-              <div className="h-3 rounded-full bg-slate-100">
-                <div className="h-3 w-[72%] rounded-full bg-indigo-950" />
-              </div>
-              <p className="text-sm text-slate-500">72% of the check-in window has elapsed.</p>
-            </div>
-          }
         />
 
         <AssetDistributionCard />

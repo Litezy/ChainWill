@@ -24,7 +24,7 @@ export default function MetricCard({
           <p className="text-sm font-semibold uppercase  text-slate-400">
             {title}
           </p>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{value}</h2>
+          <h2 className="mt-4 text-xl font-semibold tracking-tight text-slate-950">{value}</h2>
         </div>
         <div className="flex p-3 items-center justify-center rounded-3xl bg-indigo-50 text-indigo-700">
           {icon}
