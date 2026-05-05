@@ -1,16 +1,46 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContract } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useWillOwner } from '@/hooks/child/useWillOwner'
-import { useState } from 'react'
+import { useContractStore } from '@/stores/contractStore'
+import { useEffect, useState } from 'react'
+import { useContractCaller } from '@/config/contracts'
 
 export default function Header() {
   const location  = useLocation()
   const pathname  = location.pathname
   const navigate  = useNavigate()
   const { address, isConnected } = useAccount()
-  const [modalOpen, setModalOpen] = useState(false)
   const { ownsWill, isLoading: isCheckingWill } = useWillOwner(address)
+ const {factoryContractConfig} = useContractCaller()
+  const setContractAddress = useContractStore((s) => s.setContractAddress)
+  const reset = useContractStore((s) => s.reset)
+
+  // ── fetch owner's wills from factory ───────────────────────────────
+  const { data: ownerWills } = useReadContract({
+    ...factoryContractConfig,
+    functionName: "getWillsByOwner",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && isConnected },
+  })
+
+  // ── on connect: restore contract address into store ─────────────────
+  useEffect(() => {
+    if (!isConnected || !ownerWills) return;
+
+    const wills = ownerWills as string[];
+    if (wills.length > 0) {
+      // one will per owner — always take the first
+      setContractAddress(wills[0]);
+    }
+  }, [isConnected, ownerWills]);
+
+  // ── on disconnect: clear store ──────────────────────────────────────
+  useEffect(() => {
+    if (!isConnected) {
+      reset();
+    }
+  }, [isConnected]);
 
   const navItems = [
     { label: 'Home',         href: '/'            },
@@ -24,7 +54,7 @@ export default function Header() {
 
         {/* logo */}
         <Link
-          className="text-xl !text-primary !font-extrabold tracking-wide "
+          className="text-xl !text-primary !font-extrabold tracking-wide"
           to="/"
         >
           ChainWill
@@ -52,8 +82,6 @@ export default function Header() {
 
         {/* right side actions */}
         <div className="flex items-center gap-3">
-
-          {/* dashboard / create will button — shown only when connected */}
           {isConnected && !isCheckingWill && (
             ownsWill ? (
               <button
@@ -75,10 +103,10 @@ export default function Header() {
           )}
 
           <ConnectButton
-            accountStatus="address"   // show shortened address when connected
-            chainStatus="icon"        // show chain icon only
-            showBalance={false}       // hide token balance in button
-            label="Connect Wallet"    // button text when disconnected
+            accountStatus="address"
+            chainStatus="icon"
+            showBalance={false}
+            label="Connect Wallet"
           />
         </div>
       </nav>

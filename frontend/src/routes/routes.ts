@@ -11,6 +11,7 @@ import CreateNewWill from "@/pages/General/CreateNewWill";
 import Home from "@/pages/General/Home";
 import HowItWorks from "@/pages/General/HowItWorks";
 import PrivacyPolicy from "@/pages/General/PrivacyPolicy";
+import SignInheritance from "@/pages/General/SignInheritance";
 import TermsAndCondition from "@/pages/General/TermsAndCondition";
 
 export const GeneralPages = [
@@ -25,6 +26,7 @@ export const StandalonePages = [
   { path: "/claim-inheritance/:email", component: ClaimInheritance },
   {path: "/create-will", component: CreateNewWill },
   {path: "/admin", component: Admin },
+  {path: "sign-inheritance", component: SignInheritance}
 ];
 
 export const DashboardPages = [
@@ -34,3 +36,12 @@ export const DashboardPages = [
   { path: "/auth/signers", component: Signers },
   { path: "/auth/settings", component: Settings },
 ];
+
+
+//links from email
+// signers 
+// http://localhost:5173/sign-inheritance/signersemail
+
+//beneficiaries 
+// http://localhost:5173/claim-inheritance/beneficiaryemail'
+

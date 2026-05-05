@@ -42,7 +42,7 @@ export const loadingMessage = (msg?: string) => {
   return toast.loading(msg || "Processing...", {
     style: {
       ...baseStyle,
-      background: "#020617", 
+      background: "#021064", 
       color: "#e2e8f0",
     },
   })

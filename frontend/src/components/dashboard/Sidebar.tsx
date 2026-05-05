@@ -1,4 +1,3 @@
-import { CHAINWILL_CONTRACT } from "@/constants/contract";
 import { LayoutGrid, Users, UserCheck, Settings, Wallet, LogOut } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useDisconnect } from "wagmi";
@@ -15,10 +14,12 @@ export const dashboardNavItems = [
   { label: "Settings", icon: Settings, to: "/auth/settings" },
 ];
 
-const contractAddress =
-  CHAINWILL_CONTRACT.slice(0, 6) + "..." + CHAINWILL_CONTRACT.slice(-4);
+
 
 export default function Sidebar() {
+  const storedAddress = useContractStore((s) => s.contractAddress);
+const contractAddress =
+  storedAddress.slice(0, 6) + "..." + storedAddress.slice(-4);
   const { disconnect } = useDisconnect();
   const [logout,setLogout] = useState(false);
 

@@ -80,8 +80,8 @@ const Settings = () => {
       const gas = await estimateGas("setGracePeriod", [gracePeriodInSeconds]);
       if (!gas) return;
 
-      const isSuccessful = await callWriteFunction("setGracePeriod", [gracePeriodInSeconds], gas);
-      if (!isSuccessful) return;
+      const {success} = await callWriteFunction("setGracePeriod", [gracePeriodInSeconds], gas);
+      if (!success) return;
 
       triggerRefresh();
       setGracePeriodDays("");

@@ -1,8 +1,7 @@
 import { useEffect } from "react";
-
-import { CHAINWILL_CONTRACT } from "@/constants/contract";
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useWillStatusStore } from "@/stores/willStatusStore";
+import { useContractStore } from "@/stores/contractStore";
 
 type RawWillStatus = {
   approvedAmount: bigint;
@@ -16,14 +15,19 @@ type RawWillStatus = {
   finalPool: bigint;
 };
 
-export const useWillStatus = (childAddress = CHAINWILL_CONTRACT) => {
-  const { callReadFunction } = useCallReadMethods("child", childAddress);
+export const useWillStatus = (childAddress?: string) => {
+  const storedAddress = useContractStore((s) => s.contractAddress);
+  const resolvedAddress = childAddress ?? storedAddress ?? undefined;
+
+  const { callReadFunction } = useCallReadMethods("child", resolvedAddress);
   const refreshKey = useWillStatusStore((state) => state.refreshKey);
   const setWillStatus = useWillStatusStore((state) => state.setWillStatus);
   const setLoading = useWillStatusStore((state) => state.setLoading);
   const setError = useWillStatusStore((state) => state.setError);
 
   const fetchWillStatus = async () => {
+    if (!resolvedAddress) return; // no address yet — skip silently
+
     try {
       setLoading(true);
       setError(null);
@@ -54,7 +58,7 @@ export const useWillStatus = (childAddress = CHAINWILL_CONTRACT) => {
 
   useEffect(() => {
     fetchWillStatus();
-  }, [childAddress, refreshKey]);
+  }, [resolvedAddress, refreshKey]);
 
   return { refetch: fetchWillStatus };
 };
