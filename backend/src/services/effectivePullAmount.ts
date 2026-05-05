@@ -1,7 +1,6 @@
 import { viemClient } from '../config/web3';
 import { prisma } from '../config/db';
-import { CHAINWILL_ABI } from '../config/abi';
-import { parseAbi } from 'viem';
+import { CHAINWILL_PARSED_ABI } from '../config/abi';
 
 // Minimal ABI for FundingModule to call getEffectivePullAmount
 // Using the complete ChainWill ABI interface
@@ -110,7 +109,7 @@ export class EffectivePullAmountService {
       // Call getEffectivePullAmount on the will contract
       const effectiveAmount = await viemClient.readContract({
         address: will.contractAddress as `0x${string}`,
-        abi: parseAbi(CHAINWILL_ABI),
+        abi: CHAINWILL_PARSED_ABI,
         functionName: 'getEffectivePullAmount',
       });
 

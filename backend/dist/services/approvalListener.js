@@ -4,6 +4,7 @@ exports.approvalListener = exports.ApprovalListenerService = void 0;
 const web3_1 = require("../config/web3");
 const db_1 = require("../config/db");
 const abi_1 = require("../config/abi");
+const effectivePullAmount_1 = require("./effectivePullAmount");
 /**
  * Service to listen for Approval events on the ChainWillToken contract.
  * When an owner approves a will address, we update the approvedAmount in our DB.
@@ -86,6 +87,17 @@ class ApprovalListenerService {
             const spender = log.args.spender;
             const value = log.args.value;
             try {
+                const existingEvent = await db_1.prisma.eventLog.findUnique({
+                    where: {
+                        txHash_logIndex: {
+                            txHash: log.transactionHash,
+                            logIndex: log.logIndex,
+                        },
+                    },
+                });
+                if (existingEvent) {
+                    continue;
+                }
                 // Find all wills with this spender address (will contract address)
                 const wills = await db_1.prisma.will.findMany({
                     where: {
@@ -125,6 +137,7 @@ class ApprovalListenerService {
                                 willAddress: spender.toLowerCase(),
                                 eventName: 'Approval',
                                 txHash: log.transactionHash,
+                                logIndex: log.logIndex,
                                 blockNumber: Number(log.blockNumber),
                                 data: {
                                     owner,
@@ -139,6 +152,7 @@ class ApprovalListenerService {
                         }),
                     ]);
                     console.log(`[ApprovalListener] Updated will ${will.id} with approvedAmount: ${approvedAmountStr}`);
+                    await effectivePullAmount_1.effectivePullAmountService.updateWillById(will.id);
                 }
             }
             catch (error) {

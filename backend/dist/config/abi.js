@@ -3,11 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CHAINWILL_ABI = exports.FACTORY_ABI = exports.CWT_ABI = exports.CWT_ADDRESS = void 0;
+exports.CHAINWILL_PARSED_ABI = exports.FACTORY_PARSED_ABI = exports.CHAINWILL_ABI = exports.FACTORY_ABI = exports.CWT_ABI = exports.FACTORY_ADDRESS = exports.CWT_ADDRESS = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
+const viem_1 = require("viem");
 dotenv_1.default.config();
 exports.CWT_ADDRESS = (process.env.CWT_ADDRESS ||
     '0x9b068dC0418064C11d9bc563edC26890DD95a60e').toLowerCase();
+exports.FACTORY_ADDRESS = (process.env.FACTORY_ADDRESS ||
+    '0x8ea15250e4fA0924900C622a4dd5694f0B4f52E7').toLowerCase();
 // ===== CWT ABI =====
 exports.CWT_ABI = [
     {
@@ -88,3 +91,5 @@ exports.CHAINWILL_ABI = [
     "function remainingPercent() view returns (uint256)",
     "function timeUntilTrigger() view returns (uint256)"
 ];
+exports.FACTORY_PARSED_ABI = (0, viem_1.parseAbi)(exports.FACTORY_ABI);
+exports.CHAINWILL_PARSED_ABI = (0, viem_1.parseAbi)(exports.CHAINWILL_ABI);

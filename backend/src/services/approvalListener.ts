@@ -1,6 +1,7 @@
 import { viemClient } from '../config/web3';
 import { prisma } from '../config/db';
 import { CWT_ABI, CWT_ADDRESS } from '../config/abi';
+import { effectivePullAmountService } from './effectivePullAmount';
 
 interface ApprovalEvent {
   owner?: `0x${string}`;
@@ -91,7 +92,12 @@ export class ApprovalListenerService {
    * @private
    */
   private async processApprovalEvents(
-    logs: Array<{ args?: ApprovalEvent; blockNumber: bigint; transactionHash: `0x${string}` }>
+    logs: Array<{
+      args?: ApprovalEvent;
+      blockNumber: bigint;
+      logIndex: number;
+      transactionHash: `0x${string}`;
+    }>
   ): Promise<void> {
     for (const log of logs) {
       if (!log.args || !log.args.owner || !log.args.spender || log.args.value === undefined) {
@@ -104,6 +110,18 @@ export class ApprovalListenerService {
       const value = log.args.value;
 
       try {
+        const existingEvent = await prisma.eventLog.findUnique({
+          where: {
+            txHash_logIndex: {
+              txHash: log.transactionHash,
+              logIndex: log.logIndex,
+            },
+          },
+        });
+        if (existingEvent) {
+          continue;
+        }
+
         // Find all wills with this spender address (will contract address)
         const wills = await prisma.will.findMany({
           where: {
@@ -148,6 +166,7 @@ export class ApprovalListenerService {
                 willAddress: spender.toLowerCase(),
                 eventName: 'Approval',
                 txHash: log.transactionHash,
+                logIndex: log.logIndex,
                 blockNumber: Number(log.blockNumber),
                 data: {
                   owner,
@@ -164,6 +183,8 @@ export class ApprovalListenerService {
           console.log(
             `[ApprovalListener] Updated will ${will.id} with approvedAmount: ${approvedAmountStr}`
           );
+
+          await effectivePullAmountService.updateWillById(will.id);
         }
       } catch (error) {
         console.error(

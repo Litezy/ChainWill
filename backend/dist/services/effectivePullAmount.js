@@ -88,7 +88,7 @@ class EffectivePullAmountService {
             // Call getEffectivePullAmount on the will contract
             const effectiveAmount = await web3_1.viemClient.readContract({
                 address: will.contractAddress,
-                abi: (0, viem_1.parseAbi)(abi_1.CHAINWILL_ABI),
+                abi: abi_1.CHAINWILL_PARSED_ABI,
                 functionName: 'getEffectivePullAmount',
             });
             const effectiveAmountStr = effectiveAmount.toString();
