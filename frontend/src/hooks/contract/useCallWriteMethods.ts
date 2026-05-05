@@ -3,8 +3,11 @@ import { errorMessage } from "@/utils/messageStatus";
 import { useCallContract } from "./useContractCall";
 import { handleContractError } from "@/error/handleError";
 
-export const useCallWriteMethods = (childAddress?: string) => {
-    const { writeContract, assertContract } = useCallContract("child", childAddress)
+export const useCallWriteMethods = (
+    type: "factory" | "child" | "erc20" = "child",
+    contractAddress?: string
+) => {
+    const { writeContract, assertContract } = useCallContract(type, contractAddress)
     const { assertChain } = useAssertChain()
     const callWriteFunction = async (method: string, args: any[], gas: bigint): Promise<boolean> => {
         if (!assertChain()) return false;

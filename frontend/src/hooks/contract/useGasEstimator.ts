@@ -2,10 +2,10 @@ import { handleContractError } from "@/error/handleError";
 import { useCallContract } from "./useContractCall";
 
 export const useGasEstimator = (
-  type: "factory" | "child",
-  childAddress?: string
+  type: "factory" | "child" | "erc20",
+  contractAddress?: string
 ) => {
-  const { writeContract, assertContract } = useCallContract(type, childAddress)
+  const { writeContract, assertContract } = useCallContract(type, contractAddress)
 
   const estimateGas = async (
     method: string,
