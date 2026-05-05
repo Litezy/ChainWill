@@ -9,8 +9,8 @@ const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const will_routes_1 = __importDefault(require("./routes/will.routes"));
-const platform_routes_1 = __importDefault(require("./routes/platform.routes"));
-const notificationQueue_1 = require("./queues/notificationQueue");
+const beneficiary_routes_1 = __importDefault(require("./routes/beneficiary.routes"));
+const signer_routes_1 = __importDefault(require("./routes/signer.routes"));
 const web3EventService_1 = require("./services/web3EventService");
 const db_1 = require("./config/db");
 const notificationWorker_1 = require("./workers/notificationWorker");
@@ -24,25 +24,16 @@ app.use((0, morgan_1.default)('dev'));
 app.use(express_1.default.json());
 // Routes
 app.use('/api/wills', will_routes_1.default);
-app.use('/api/platform', platform_routes_1.default);
+app.use('/api/beneficiary', beneficiary_routes_1.default);
+app.use('/api/signer', signer_routes_1.default);
 // Health Check Endpoint
 app.get('/health', (req, res) => {
     const dbConnected = global.dbConnected || false;
-    const web3Status = web3EventService_1.web3EventService.getStatus();
     res.status(200).json({
         status: 'OK',
         message: 'ChainWill API is running',
         database: dbConnected ? 'connected' : 'disconnected',
         web3Services: dbConnected && web3EventService_1.web3EventService.isHealthy() ? 'running' : 'stopped',
-        relayer: dbConnected
-            ? web3Status.inactivityMonitor
-            : {
-                running: false,
-                configured: false,
-                relayerAddress: null,
-                lastCompletedAt: null,
-            },
-        notifications: dbConnected && notificationWorker_1.notificationWorker.isHealthy() ? 'running' : 'stopped',
         timestamp: new Date().toISOString(),
     });
 });
@@ -65,12 +56,6 @@ const server = app.listen(PORT, async () => {
     global.dbConnected = dbConnected;
     if (dbConnected) {
         try {
-            if (shouldAutostartNotificationWorker) {
-                await notificationWorker_1.notificationWorker.start();
-            }
-            else {
-                console.log('[Server] Notification worker autostart disabled');
-            }
             // Start Web3 event listeners and background jobs only if DB is connected
             await web3EventService_1.web3EventService.start();
         }

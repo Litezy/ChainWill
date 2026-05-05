@@ -3,9 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const will_controller_1 = require("../controllers/will.controller");
 const router = (0, express_1.Router)();
-// Get 
-router.get('/:willId/approval-history', will_controller_1.getApprovalHistory);
-router.post('/:willId/refresh-effective-amount', will_controller_1.refreshEffectivePullAmount);
-router.post('/:willAddress/notify', will_controller_1.notifyWillOwner);
-router.get('/:willId', will_controller_1.getWillDetails);
+router.get('/address/:willAddress/status', will_controller_1.getWillStatus);
+router.get('/address/:willAddress', will_controller_1.getWillByAddress);
+router.get('/id/:willId/approval-history', will_controller_1.getApprovalHistory);
+router.post('/id/:willId/refresh-effective-amount', will_controller_1.refreshEffectivePullAmount);
+router.get('/:willAddress/beneficiaries', will_controller_1.getWillBeneficiaries);
+router.get('/:willAddress/signers', will_controller_1.getWillSigners);
+router.get('/id/:willId', will_controller_1.getWillDetails);
+router.get('/:ownerAddress', will_controller_1.getWillsByOwner);
 exports.default = router;

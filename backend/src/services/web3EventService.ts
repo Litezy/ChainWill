@@ -1,6 +1,7 @@
 import { approvalListener } from './approvalListener';
 import { effectivePullAmountService } from './effectivePullAmount';
-import { inactivityMonitorJob } from '../jobs/monitor';
+import { factoryIndexer } from '../jobs/factory-indexer';
+import { willIndexer } from '../jobs/will-indexer';
 
 /**
  * Service to manage all Web3 event listeners and background jobs
@@ -19,6 +20,12 @@ export class Web3EventService {
 
     try {
       console.log('[Web3EventService] Starting all Web3 services...');
+
+      // Start factory indexer first so newly created wills are available for child listeners
+      await factoryIndexer.start();
+
+      // Start child will event indexer
+      await willIndexer.start();
 
       // Start approval listener
       await approvalListener.start();
@@ -47,6 +54,8 @@ export class Web3EventService {
 
     try {
       approvalListener.stop();
+      factoryIndexer.stop();
+      willIndexer.stop();
       effectivePullAmountService.stop();
       inactivityMonitorJob.stop();
       this.isRunning = false;

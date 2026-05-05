@@ -4,11 +4,10 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import willRoutes from './routes/will.routes';
-import platformRoutes from './routes/platform.routes';
-import { notificationQueue } from './queues/notificationQueue';
+import beneficiaryRoutes from './routes/beneficiary.routes';
+import signerRoutes from './routes/signer.routes';
 import { web3EventService } from './services/web3EventService';
 import { prisma } from './config/db';
-import { notificationWorker } from './workers/notificationWorker';
 
 dotenv.config();
 
@@ -24,7 +23,8 @@ app.use(express.json());
 
 // Routes
 app.use('/api/wills', willRoutes);
-app.use('/api/platform', platformRoutes);
+app.use('/api/beneficiary', beneficiaryRoutes);
+app.use('/api/signer', signerRoutes);
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
@@ -118,8 +118,6 @@ process.on('SIGINT', async () => {
 process.on('uncaughtException', async (error) => {
   console.error('Uncaught Exception:', error);
   await web3EventService.stop();
-  await notificationWorker.stop();
-  await notificationQueue.close();
   await prisma.$disconnect();
   process.exit(1);
 });
