@@ -13,7 +13,7 @@ const CheckinButton: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const triggerUnlocksAt = useWillStatusStore((state) => state.triggerUnlocksAt);
   const triggered = useWillStatusStore((state) => state.triggered);
-  const [now,] = useState(Date.now());
+  const [now,] = useState(() => Date.now());
 
   const handleCheckIn = async () => {
     setIsSubmitting(true);

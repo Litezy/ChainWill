@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom"; // ← fix: query param not route param
 import { ShieldCheck, AlertTriangle } from "lucide-react";
 import { useContractStore } from "@/stores/contractStore";
@@ -33,19 +33,30 @@ const SignInheritance = () => {
 
   const contractAddress = useContractStore((s) => s.contractAddress);
 
-  const { callReadFunction } = useCallReadMethods("child", contractAddress ?? undefined);
-  const { callWriteFunction } = useCallWriteMethods("child", contractAddress ?? undefined);
-  const { estimateGas } = useGasEstimator("child", contractAddress ?? undefined);
+  const { callReadFunction } = useCallReadMethods(
+    "child",
+    contractAddress ?? undefined,
+  );
+  const { callWriteFunction } = useCallWriteMethods(
+    "child",
+    contractAddress ?? undefined,
+  );
+  const { estimateGas } = useGasEstimator(
+    "child",
+    contractAddress ?? undefined,
+  );
 
   const [step, setStep] = useState<PageStep>("verify-email");
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [otpInput, setOtpInput] = useState("");
   const [otpError, setOtpError] = useState("");
   const [isAttesting, setIsAttesting] = useState(false);
-  const [attestation, setAttestation] = useState<AttestationStatus | null>(null);
+  const [attestation, setAttestation] = useState<AttestationStatus | null>(
+    null,
+  );
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
 
-  const fetchAttestationStatus = async () => {
+  const fetchAttestationStatus = useCallback(async () => {
     if (!contractAddress) return;
     setIsLoadingStatus(true);
     try {
@@ -54,11 +65,15 @@ const SignInheritance = () => {
       const [available, count, required] = result as [boolean, bigint, bigint];
       setAttestation({ available, count, required });
     } catch (err) {
-      console.error("Failed to fetch attestation status:", err);
+      console.error(err);
     } finally {
       setIsLoadingStatus(false);
     }
-  };
+  }, [contractAddress, callReadFunction]);
+
+  useEffect(() => {
+    if (step === "attest") fetchAttestationStatus();
+  }, [step, fetchAttestationStatus]); // ← now both deps included, no warning
 
   useEffect(() => {
     if (step === "attest") fetchAttestationStatus();
@@ -114,7 +129,9 @@ const SignInheritance = () => {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
             <AlertTriangle className="h-8 w-8 text-amber-600" />
           </div>
-          <h1 className="mt-6 text-xl font-semibold text-slate-950">No Will Found</h1>
+          <h1 className="mt-6 text-xl font-semibold text-slate-950">
+            No Will Found
+          </h1>
           <p className="mt-3 text-sm leading-6 text-slate-500">
             The will contract could not be located. Please ensure you have the
             correct link from the will owner.
@@ -127,7 +144,6 @@ const SignInheritance = () => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-md space-y-6">
-
         {/* header */}
         <div className="text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
@@ -137,12 +153,14 @@ const SignInheritance = () => {
             Sign Inheritance
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            You've been designated as a signer for a ChainWill testament.
-            Verify your identity to attest.
+            You've been designated as a signer for a ChainWill testament. Verify
+            your identity to attest.
           </p>
           {/* show email in header once we have it */}
           {signerEmail && (
-            <p className="mt-1 text-xs text-primary font-medium">{signerEmail}</p>
+            <p className="mt-1 text-xs text-primary font-medium">
+              {signerEmail}
+            </p>
           )}
         </div>
 

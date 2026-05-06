@@ -3,7 +3,7 @@ import { useAccount, useReadContract } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useWillOwner } from '@/hooks/child/useWillOwner'
 import { useContractStore } from '@/stores/contractStore'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useContractCaller } from '@/config/contracts'
 
 export default function Header() {
@@ -33,14 +33,14 @@ export default function Header() {
       // one will per owner — always take the first
       setContractAddress(wills[0]);
     }
-  }, [isConnected, ownerWills]);
+  }, [isConnected, ownerWills, setContractAddress]);
 
   // ── on disconnect: clear store ──────────────────────────────────────
   useEffect(() => {
     if (!isConnected) {
       reset();
     }
-  }, [isConnected]);
+  }, [isConnected,reset]);
 
   const navItems = [
     { label: 'Home',         href: '/'            },

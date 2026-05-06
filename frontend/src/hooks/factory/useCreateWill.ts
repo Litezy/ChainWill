@@ -102,8 +102,9 @@ export const useCreateWill = () => {
 
       successMessage("Will created successfully");
       return true;
-    } catch (error: any) {
-      errorMessage(error?.message ?? "Something went wrong");
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Something went wrong";
+      errorMessage(msg)
       return false;
     } finally {
       dismissToast(toastId);

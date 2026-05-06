@@ -1,8 +1,9 @@
 import React, { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
-import Sidebar, { dashboardNavItems } from '@/components/dashboard/Sidebar';
+import Sidebar from '@/components/dashboard/Sidebar';
 import CreateNewWill from '@/pages/General/CreateNewWill';
+import { dashboardNavItems } from '@/components/dashboard/sidebarConfig';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -14,7 +15,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <Sidebar onDraftNewWill={() => setCreateWillOpen(true)} />
+      <Sidebar />
 
       <div className="lg:ml-[18%]">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-slate-100/95 px-4 py-3 backdrop-blur-sm lg:hidden">

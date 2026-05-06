@@ -24,7 +24,7 @@ export const GeneralPages = [
 
 export const StandalonePages = [
   { path: "/claim-inheritance/:email", component: ClaimInheritance },
-  {path: "/create-will", component: CreateNewWill },
+  {path: "/create-will", component: CreateNewWill ,props: { onClose: () => {} }},
   {path: "/admin", component: Admin },
   {path: "sign-inheritance", component: SignInheritance}
 ];

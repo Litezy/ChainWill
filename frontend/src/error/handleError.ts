@@ -34,7 +34,7 @@ export const decodeContractError = (error: any): string => {
 };
 
 
-export const handleContractError = (error: any) => {
+export const handleContractError = (error: unknown) => {
   const message = decodeContractError(error);
 
   console.error("Contract Error:", error);

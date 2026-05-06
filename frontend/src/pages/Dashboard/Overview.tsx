@@ -11,7 +11,7 @@ import { formatCwtAmount, getPrimaryTriggerCountdown } from '@/utils/willStatus'
 
 const Overview: React.FC = () => {
   useWillStatus();
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const isLoading = useWillStatusStore((state) => state.isLoading);
   const effectivePullAmount = useWillStatusStore((state) => state.effectivePullAmount);
   const timeRemaining = useWillStatusStore((state) => state.timeRemaining);
