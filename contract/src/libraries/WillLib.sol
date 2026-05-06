@@ -32,6 +32,12 @@ library WillLib {
         string email;
     }
 
+    struct OwnerInfo {
+        string name;
+        string email;
+        address wallet;
+    }
+
     // ─────────────────────────────────────────────
     // CENTRAL STORAGE STRUCT
     // all modules read/write from this single struct
@@ -44,6 +50,7 @@ library WillLib {
         address pendingRecoveryWallet;  // new wallet pending confirmation in recovery flow
         bool    locked;                 // true after trigger — no more config changes
         bool    triggered;              // true after will has been executed
+        OwnerInfo ownerInfo;
 
         // ── TIMING ────────────────────────────────
         uint256 lastCheckIn;            // last time owner proved they're alive

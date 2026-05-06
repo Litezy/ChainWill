@@ -28,11 +28,16 @@ contract TriggerModuleTest is Test {
         // tokens stay in owner's wallet
         token.mint(owner, DEPOSIT);
 
-        address[] memory signers = new address[](1);
-        signers[0] = signer1;
+        WillLib.SignerInput[] memory signers = new WillLib.SignerInput[](1);
+        signers[0] = WillLib.SignerInput({wallet: signer1, name: "", email: ""});
+        WillLib.OwnerInfo memory ownerInfo = WillLib.OwnerInfo({
+            name: "",
+            email: "",
+            wallet: owner
+        });
 
         vm.prank(owner);
-        address willAddr = factory.createWill( signers);
+        address willAddr = factory.createWill(signers, ownerInfo);
         will = ChainWill(willAddr);
 
         // owner approves the will to pull their tokens at trigger time
@@ -144,11 +149,16 @@ contract TriggerModuleTest is Test {
 
     function test_revert_trigger_noBeneficiaries() public {
         // deploy fresh will with no beneficiaries
-        address[] memory signers = new address[](1);
-        signers[0] = signer1;
+        WillLib.SignerInput[] memory signers = new WillLib.SignerInput[](1);
+        signers[0] = WillLib.SignerInput({wallet: signer1, name: "", email: ""});
+        WillLib.OwnerInfo memory ownerInfo = WillLib.OwnerInfo({
+            name: "",
+            email: "",
+            wallet: owner
+        });
 
         vm.prank(owner);
-        address w2 = factory.createWill( signers);
+        address w2 = factory.createWill(signers, ownerInfo);
         ChainWill will2 = ChainWill(w2);
 
         vm.prank(owner);

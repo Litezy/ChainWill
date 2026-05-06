@@ -15,7 +15,6 @@ import {
 import {
   formatCountdown,
   formatUnixDateTime,
-  getLiveTimeRemaining,
   getSecondsUntil,
 } from '@/utils/willStatus';
 
@@ -26,13 +25,14 @@ const Settings = () => {
   const { estimateGas } = useGasEstimator("child");
   const triggerRefresh = useWillStatusStore((state) => state.triggerRefresh);
   const isLoading = useWillStatusStore((state) => state.isLoading);
-  const timeRemaining = useWillStatusStore((state) => state.timeRemaining);
   const attestationOpensAt = useWillStatusStore((state) => state.attestationOpensAt);
   const triggerUnlocksAt = useWillStatusStore((state) => state.triggerUnlocksAt);
   const triggered = useWillStatusStore((state) => state.triggered);
   const locked = useWillStatusStore((state) => state.locked);
-  const lastUpdatedAt = useWillStatusStore((state) => state.lastUpdatedAt);
-  const [now, setNow] = useState(() => Date.now());
+  const inactivityPeriod = useWillStatusStore((state) => state.inactivityPeriod);
+  const lastCheckIn = useWillStatusStore((state) => state.lastCheckIn);
+  const gracePeriod = useWillStatusStore((state) => state.gracePeriod);
+  const [now, setNow] = useState(Date.now());
   const [gracePeriodDays, setGracePeriodDays] = useState("");
   const [isUpdatingGracePeriod, setIsUpdatingGracePeriod] = useState(false);
 
@@ -48,31 +48,30 @@ const Settings = () => {
 
   const nowInSeconds = Math.floor(now / 1000);
 
-  const gracePeriodExpired = triggered && triggerUnlocksAt > 0 && nowInSeconds >= triggerUnlocksAt;
-  const gracePeriodActive = triggered && triggerUnlocksAt > 0 && nowInSeconds < triggerUnlocksAt;
+  const gracePeriodStart = lastCheckIn + inactivityPeriod;
+  const gracePeriodExpiresAt = lastCheckIn > 0 ? gracePeriodStart + gracePeriod : 0;
+  const gracePeriodExpired = lastCheckIn > 0 && gracePeriod > 0 && nowInSeconds >= gracePeriodExpiresAt;
+  const gracePeriodActive = lastCheckIn > 0 && nowInSeconds >= gracePeriodStart && nowInSeconds < gracePeriodExpiresAt;
 
-  const inactivityCountdown = triggered
-    ? "0s"
-    : formatCountdown(getLiveTimeRemaining(timeRemaining, lastUpdatedAt, now));
   const attestationCountdown = formatCountdown(getSecondsUntil(attestationOpensAt, now));
   const unlockCountdown = formatCountdown(getSecondsUntil(triggerUnlocksAt, now));
-  const currentGracePeriod = !triggered
+  const currentGracePeriod = lastCheckIn === 0 || gracePeriod === 0
     ? "Not started"
     : gracePeriodExpired
     ? "Expired"
     : gracePeriodActive
-    ? formatCountdown(triggerUnlocksAt - nowInSeconds)
-    : "0s";
+    ? formatCountdown(gracePeriodExpiresAt - nowInSeconds)
+    : formatCountdown(Math.max(gracePeriodStart - nowInSeconds, 0));
 
   const handleGracePeriodUpdate = async () => {
-    const parsedDays = Number(gracePeriodDays);
+    const parsedMinutes = Number(gracePeriodDays);
 
-    if (!Number.isFinite(parsedDays) || parsedDays <= 0) {
-      errorMessage("Enter a valid grace period in days");
+    if (!Number.isFinite(parsedMinutes) || parsedMinutes <= 0) {
+      errorMessage("Enter a valid grace period in minutes");
       return;
     }
 
-    const gracePeriodInSeconds = BigInt(Math.floor(parsedDays * 86400));
+    const gracePeriodInSeconds = BigInt(Math.floor(parsedMinutes * 60));
     const toastId = loadingMessage("Updating grace period...");
     setIsUpdatingGracePeriod(true);
 
@@ -91,6 +90,7 @@ const Settings = () => {
       setIsUpdatingGracePeriod(false);
     }
   };
+
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -122,15 +122,35 @@ const Settings = () => {
             <ShieldCheck className="h-5 w-5 text-primary" />
           </div>
 
-          <div className="mt-6 space-y-6">
+          <div className="mt-6 space-y-6 grid grid-cols-2 gap-5">
             <div className="rounded-3xl bg-slate-50 p-4">
               <div className="flex items-center justify-between text-sm text-slate-500">
-                <span>Inactivity countdown</span>
+                <span>Inactivity period</span>
                 <span className="font-semibold text-slate-950">
-                  {isLoading ? "Loading..." : inactivityCountdown}
+                  {isLoading ? "Loading..." : `${Math.floor(inactivityPeriod / (24 * 60 * 60))} days`}
                 </span>
               </div>
-              <p className="mt-3 text-sm text-slate-500">Time left before the proof-of-life process begins.</p>
+              <p className="mt-3 text-sm text-slate-500">Time before attestation can begin after last check-in.</p>
+            </div>
+
+            <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="flex items-center justify-between text-sm text-slate-500">
+                <span>Last check-in</span>
+                <span className="font-semibold text-slate-950">
+                  {isLoading ? "Loading..." : formatUnixDateTime(lastCheckIn)}
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-slate-500">Last time owner proved they are alive.</p>
+            </div>
+
+            <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="flex items-center justify-between text-sm text-slate-500">
+                <span>Grace period</span>
+                <span className="font-semibold text-slate-950">
+                  {isLoading ? "Loading..." : `${Math.floor(gracePeriod / 60)} minutes`}
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-slate-500">Buffer time after inactivity before trigger fires.</p>
             </div>
 
             <div className="rounded-3xl bg-slate-50 p-4">
@@ -157,7 +177,9 @@ const Settings = () => {
               </p>
             </div>
 
-            <div className="rounded-3xl bg-slate-50 p-4">
+           
+          </div>
+           <div className="rounded-3xl mt-5  bg-slate-50 p-4">
               <div className="flex items-center justify-between text-sm text-slate-500">
                 <span>Current grace period</span>
                 <div className="flex items-center gap-2">
@@ -183,31 +205,34 @@ const Settings = () => {
                 {gracePeriodExpired
                   ? "Grace period has ended. Trigger is now unlocked."
                   : gracePeriodActive
-                  ? `Expires ${formatUnixDateTime(triggerUnlocksAt)}.`
+                  ? `Expires ${formatUnixDateTime(gracePeriodExpiresAt)}.`
                   : "Only the grace period is configurable here. Inactivity timing remains contract-controlled."}
               </p>
 
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={gracePeriodDays}
-                  onChange={(event) => setGracePeriodDays(event.target.value)}
-                  placeholder="Grace period in days"
-                  className="w-2/3 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  onClick={handleGracePeriodUpdate}
-                  disabled={isUpdatingGracePeriod}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 !text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                  {isUpdatingGracePeriod ? "Updating..." : "Update"}
-                </button>
-              </div>
+              {!gracePeriodExpired && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={gracePeriodDays}
+                      onChange={(event) => setGracePeriodDays(event.target.value)}
+                      placeholder="Grace period in minutes"
+                      className="w-full rounded-full border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:w-2/3"
+                    />
+                    <button
+                      onClick={handleGracePeriodUpdate}
+                      disabled={isUpdatingGracePeriod}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 !text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      {isUpdatingGracePeriod ? "Updating..." : "Update"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
         </div>
 
         <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50">

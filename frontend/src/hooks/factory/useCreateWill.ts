@@ -17,10 +17,22 @@ type Signer = {
   email: string;
 };
 
+type SignerInput = {
+  wallet: string;
+  name: string;
+  email: string;
+};
+
 type CreateWillPayload = {
   ownerName: string;
   ownerEmail: string;
   signers: Signer[];
+};
+
+type OwnerInfoInput = {
+  name: string;
+  email: string;
+  wallet: string;
 };
 
 export const useCreateWill = () => {
@@ -40,7 +52,7 @@ export const useCreateWill = () => {
   });
 
   const createWill = async (payload: CreateWillPayload): Promise<boolean> => {
-    const { signers } = payload;
+    const { ownerName, ownerEmail, signers } = payload;
 
     if (!ownerAddress) {
       errorMessage("Wallet not connected");
@@ -54,21 +66,33 @@ export const useCreateWill = () => {
       return false;
     }
 
-    const signerAddresses = signers.map((s) => s.address);
+    const signerInputs: SignerInput[] = signers.map((s) => ({
+      wallet: s.address,
+      name: s.name,
+      email: s.email,
+    }));
+    const ownerInfo: OwnerInfoInput = {
+      name: ownerName.trim(),
+      email: ownerEmail.trim(),
+      wallet: ownerAddress,
+    };
+
     const toastId = loadingMessage("Estimating gas...");
     setIsSubmitting(true);
 
     try {
       // ── 2. estimate gas ─────────────────────────────────────────────
-      const gas = await estimateGas("createWill", [signerAddresses]);
+      const createWillMethod =
+        "createWill((address,string,string)[],(string,string,address))";
+      const gas = await estimateGas(createWillMethod, [signerInputs, ownerInfo]);
       if (!gas) return false;
 
       // ── 3. send tx ──────────────────────────────────────────────────
       loadingMessage("Creating will on-chain...");
 
       const { success, receipt } = await callWriteFunction(
-        "createWill",
-        [signerAddresses],
+        createWillMethod,
+        [signerInputs, ownerInfo],
         gas
       );
 

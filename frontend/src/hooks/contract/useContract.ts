@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Contract, getAddress } from "ethers";
-import FACTORY_ABI from "@/ABI/factoryAbi";
-import chainWillAbi from "@/ABI/chainWIllAbi";
+import {FACTORY_ABI} from "@/ABI/factoryAbi";
+import {chainWillAbi} from "@/ABI/chainWillAbi";
 import useRunners from "@/config/useRunner";
 import { FACTORY_CONTRACT_ADDRESS, CHAINWILL_TOKEN_CONTRACT_ADDRESS } from "@/constants/contract";
 import { TOKEN_ABI } from "@/ABI/tokenAbi";

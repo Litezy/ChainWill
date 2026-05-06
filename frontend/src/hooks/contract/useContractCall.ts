@@ -15,7 +15,7 @@ export const useCallContract = (
   const writeContract = useContract({
     type,
     withSigner: true,
-    address: childAddress,
+    address: childAddress, 
   })
 
   const assertContract = useCallback(

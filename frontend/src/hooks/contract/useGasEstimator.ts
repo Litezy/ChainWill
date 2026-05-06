@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { handleContractError } from "@/error/handleError";
 import { useCallContract } from "./useContractCall";
 
@@ -8,30 +7,29 @@ export const useGasEstimator = (
 ) => {
   const { writeContract, assertContract } = useCallContract(type, contractAddress)
 
-  const estimateGas = useCallback(
-    async (
-      method: string,
-      args: any[]
-    ): Promise<bigint | null> => {
-      if (!assertContract(true)) return null
+  const estimateGas = async (
+    method: string,
+    args: any[]
+  ): Promise<bigint | null> => {
 
-      try {
-        // simulate first (good practice)
-        await writeContract![method].staticCall(...args)
+    if (!assertContract(true)) return null
 
-        const estimatedGas = await writeContract![method].estimateGas(...args)
+    try {
+      // simulate first (good practice)
+      await writeContract![method].staticCall(...args)
 
-        // add 20% buffer
-        const estimatedGasPlusBuffer = (120n * estimatedGas) / 100n
+      const estimatedGas = await writeContract![method].estimateGas(...args)
 
-        return estimatedGasPlusBuffer
-      } catch (error: any) {
-        handleContractError(error)
-        return null
-      }
-    },
-    [assertContract, writeContract]
-  )
+      // add 20% buffer
+      const estimatedGasPlusBuffer = (120n * estimatedGas) / 100n
+
+      return estimatedGasPlusBuffer
+
+    } catch (error: any) {
+    handleContractError(error)
+      return null
+    }
+  }
 
   return { estimateGas }
 }

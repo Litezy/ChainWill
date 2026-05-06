@@ -1,7 +1,26 @@
+import { useMemo } from "react";
+import { useAccount } from "wagmi";
+
+import { useContractStore } from "@/stores/contractStore";
 import { useTokenApprovalStore } from "@/stores/tokenApprovalStore";
 
 export default function FundingTransactionsCard() {
+  const { address } = useAccount();
+  const contractAddress = useContractStore((state) => state.contractAddress);
   const transactions = useTokenApprovalStore((state) => state.history);
+
+  const filteredTransactions = useMemo(() => {
+    if (!contractAddress || !address) return [];
+
+    const normalizedContract = contractAddress.toLowerCase();
+    const normalizedOwner = address.toLowerCase();
+
+    return transactions.filter(
+      (tx) =>
+        tx.contractAddress?.toLowerCase() === normalizedContract &&
+        tx.ownerAddress?.toLowerCase() === normalizedOwner
+    );
+  }, [transactions, contractAddress, address]);
 
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/50">
@@ -27,9 +46,12 @@ export default function FundingTransactionsCard() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {transactions.length > 0 ? (
-              transactions.map((transaction) => (
-                <tr key={transaction.id} className="hover:bg-slate-50">
+            {filteredTransactions.length > 0 ? (
+              filteredTransactions.map((transaction) => (
+                <tr
+                  key={`${transaction.contractAddress}-${transaction.ownerAddress}-${transaction.id}`}
+                  className="hover:bg-slate-50"
+                >
                   <td className="px-4 py-4 font-semibold text-slate-950">{transaction.event}</td>
                   <td className="px-4 py-4">{transaction.asset}</td>
                   <td className="px-4 py-4 text-slate-950">{Number(transaction.amount).toLocaleString()}</td>

@@ -7,6 +7,9 @@ export type ApprovalHistoryItem = {
   asset: string;
   tokenAddress: string;
   spender: string;
+  contractAddress: string;
+  willAddress: string;
+  ownerAddress: string;
   amount: string;
   status: "success" | "revoked";
   date: string;
@@ -14,20 +17,38 @@ export type ApprovalHistoryItem = {
 };
 
 type ApprovedTokenState = {
-  approvedTokens: Record<string, { asset: string; amount: string; spender: string }>;
+  approvedTokens: Record<
+    string,
+    {
+      asset: string;
+      amount: string;
+      spender: string;
+      contractAddress: string;
+      willAddress: string;
+      ownerAddress: string;
+    }
+  >;
   history: ApprovalHistoryItem[];
   setApprovedToken: (
+    contractAddress: string,
     tokenAddress: string,
     asset: string,
     amount: string,
-    spender: string
+    spender: string,
+    ownerAddress: string,
+    willAddress: string
   ) => void;
   addApprovalHistory: (item: ApprovalHistoryItem) => void;
   clearApprovalHistory: () => void;
 };
 
-const getApprovalKey = (tokenAddress: string, spender: string) =>
-  `${tokenAddress.toLowerCase()}:${spender.toLowerCase()}`;
+const getApprovalKey = (
+  contractAddress: string,
+  tokenAddress: string,
+  spender: string,
+  ownerAddress: string
+) =>
+  `${contractAddress.toLowerCase()}:${tokenAddress.toLowerCase()}:${spender.toLowerCase()}:${ownerAddress.toLowerCase()}`;
 
 export const useTokenApprovalStore = create<ApprovedTokenState>()(
   persist(
@@ -35,14 +56,17 @@ export const useTokenApprovalStore = create<ApprovedTokenState>()(
       approvedTokens: {},
       history: [],
 
-      setApprovedToken: (tokenAddress, asset, amount, spender) =>
+      setApprovedToken: (contractAddress, tokenAddress, asset, amount, spender, ownerAddress, willAddress) =>
         set((state) => ({
           approvedTokens: {
             ...state.approvedTokens,
-            [getApprovalKey(tokenAddress, spender)]: {
+            [getApprovalKey(contractAddress, tokenAddress, spender, ownerAddress)]: {
               asset,
               amount,
               spender,
+              contractAddress,
+              willAddress,
+              ownerAddress,
             },
           },
         })),

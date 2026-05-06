@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom"; // ← fix: query param not route param
-import { ShieldCheck, AlertTriangle } from "lucide-react";
-import { useContractStore } from "@/stores/contractStore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { getAddress } from "ethers";
+import { useAccount } from "wagmi";
+import { ShieldCheck, AlertTriangle, Loader2, UserCircle2 } from "lucide-react";
+import CustomConnectButton from "@/components/CustomConnectButton";
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
 import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
@@ -10,13 +12,31 @@ import {
   loadingMessage,
   successMessage,
 } from "@/utils/messageStatus";
-import StepIndicator from "@/components/sign/StepIndicator";
-import StepVerifyEmail from "@/components/sign/StepVerifyEmail";
-import StepOtp from "@/components/sign/StepOtp";
-import StepAttest from "@/components/sign/StepAttest";
-import StepSuccess from "@/components/sign/StepSuccess";
 
-type PageStep = "verify-email" | "otp" | "attest" | "success";
+const decodeContractAddress = (value: string | null): `0x${string}` | null => {
+  if (!value) return null;
+
+  try {
+    return getAddress(decodeURIComponent(value).trim()) as `0x${string}`;
+  } catch {
+    return null;
+  }
+};
+
+type RawSigner = {
+  id: bigint;
+  wallet: string;
+  signed: boolean;
+  signedAt: bigint;
+  name: string;
+  email: string;
+};
+
+type OwnerProfile = {
+  name: string;
+  email: string;
+  wallet: string;
+};
 
 type AttestationStatus = {
   available: boolean;
@@ -24,87 +44,103 @@ type AttestationStatus = {
   required: bigint;
 };
 
-const SIMULATED_OTP = "847291";
+type WillStatus = {
+  triggered: boolean;
+  locked: boolean;
+  finalPool: bigint;
+};
 
 const SignInheritance = () => {
-  // ── fix: read from query param not route param ──────────────────────
+  const { email: emailParam } = useParams();
   const [searchParams] = useSearchParams();
-  const signerEmail = searchParams.get("signerEmail") ?? "";
+  const { address, isConnected } = useAccount();
 
-  const contractAddress = useContractStore((s) => s.contractAddress);
-
-  const { callReadFunction } = useCallReadMethods(
-    "child",
-    contractAddress ?? undefined,
-  );
-  const { callWriteFunction } = useCallWriteMethods(
-    "child",
-    contractAddress ?? undefined,
-  );
-  const { estimateGas } = useGasEstimator(
-    "child",
-    contractAddress ?? undefined,
+  const signerEmail = useMemo(
+    () =>
+      (
+        emailParam ??
+        searchParams.get("signerEmail") ??
+        searchParams.get("email") ??
+        ""
+      ).trim(),
+    [emailParam, searchParams]
   );
 
-  const [step, setStep] = useState<PageStep>("verify-email");
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [otpInput, setOtpInput] = useState("");
-  const [otpError, setOtpError] = useState("");
-  const [isAttesting, setIsAttesting] = useState(false);
-  const [attestation, setAttestation] = useState<AttestationStatus | null>(
-    null,
-  );
-  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const childAddress =
+    decodeContractAddress(searchParams.get("contract")) ??
+    decodeContractAddress(searchParams.get("child")) ??
+    decodeContractAddress(searchParams.get("will"));
+  const resolvedChildAddress = childAddress ?? undefined;
 
-  const fetchAttestationStatus = useCallback(async () => {
-    if (!contractAddress) return;
-    setIsLoadingStatus(true);
-    try {
-      const result = await callReadFunction("getAttestationStatus", []);
-      if (!result) return;
-      const [available, count, required] = result as [boolean, bigint, bigint];
-      setAttestation({ available, count, required });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoadingStatus(false);
-    }
-  }, [contractAddress, callReadFunction]);
+  const { callReadFunction } = useCallReadMethods("child", resolvedChildAddress);
+  const { callWriteFunction } = useCallWriteMethods("child", resolvedChildAddress);
+  const { estimateGas } = useGasEstimator("child", resolvedChildAddress);
 
-  useEffect(() => {
-    if (step === "attest") fetchAttestationStatus();
-  }, [step, fetchAttestationStatus]); // ← now both deps included, no warning
+  const [signer, setSigner] = useState<RawSigner | null>(null);
+  const [ownerProfile, setOwnerProfile] = useState<OwnerProfile | null>(null);
+  const [attestation, setAttestation] = useState<AttestationStatus | null>(null);
+  const [willStatus, setWillStatus] = useState<WillStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmittedInSession, setHasSubmittedInSession] = useState(false);
 
-  useEffect(() => {
-    if (step === "attest") fetchAttestationStatus();
-  }, [step, contractAddress]);
-
-  const handleSendOtp = () => {
-    setIsSendingOtp(true);
-    setTimeout(() => {
-      setIsSendingOtp(false);
-      setStep("otp");
-    }, 1200);
-  };
-
-  const handleVerifyOtp = () => {
-    if (otpInput.trim() !== SIMULATED_OTP) {
-      setOtpError("Incorrect OTP. Please try again.");
+  const fetchPageData = useCallback(async () => {
+    if (!signerEmail) {
+      setIsLoading(false);
       return;
     }
-    setOtpError("");
-    setStep("attest");
-  };
 
-  const handleResendOtp = () => {
-    setOtpInput("");
-    setOtpError("");
-    setStep("verify-email");
-  };
+    setIsLoading(true);
+    try {
+      const [signerResult, ownerResult, attestationResult, willStatusResult] =
+        await Promise.all([
+          callReadFunction<RawSigner>("getSignerByEmail", [signerEmail]),
+          callReadFunction<[string, string, string]>("getOwnerProfile", []),
+          callReadFunction<[boolean, bigint, bigint]>("getAttestationStatus", []),
+          callReadFunction<any>("getWillStatus", []),
+        ]);
+
+      if (signerResult) setSigner(signerResult);
+      if (ownerResult) {
+        const [name, email, wallet] = ownerResult;
+        setOwnerProfile({ name, email, wallet });
+      }
+      if (attestationResult) {
+        const [available, count, required] = attestationResult;
+        setAttestation({ available, count, required });
+      }
+      if (willStatusResult) {
+        setWillStatus({
+          triggered: willStatusResult.triggered,
+          locked: willStatusResult.locked,
+          finalPool: willStatusResult.finalPool,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [callReadFunction, signerEmail]);
+
+  useEffect(() => {
+    void fetchPageData();
+  }, [fetchPageData]);
+
+  const walletMatchesSigner =
+    !!address &&
+    !!signer &&
+    address.toLowerCase() === signer.wallet.toLowerCase();
+
+  const canAttest =
+    !!signer &&
+    !!attestation?.available &&
+    walletMatchesSigner &&
+    !willStatus?.triggered &&
+    !hasSubmittedInSession;
 
   const handleAttest = async () => {
     const toastId = loadingMessage("Estimating gas...");
-    setIsAttesting(true);
+    setIsSubmitting(true);
+
     try {
       const gas = await estimateGas("triggerBySigners", []);
       if (!gas) return;
@@ -113,28 +149,38 @@ const SignInheritance = () => {
       const { success } = await callWriteFunction("triggerBySigners", [], gas);
       if (!success) return;
 
+      setHasSubmittedInSession(true);
       successMessage("Attestation submitted successfully");
-      await fetchAttestationStatus();
-      setStep("success");
+      await fetchPageData();
     } finally {
       dismissToast(toastId);
-      setIsAttesting(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (!contractAddress) {
+  if (!signerEmail) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md w-full rounded-[28px] border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
-            <AlertTriangle className="h-8 w-8 text-amber-600" />
-          </div>
-          <h1 className="mt-6 text-xl font-semibold text-slate-950">
-            No Will Found
-          </h1>
+        <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-10 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />
+          <h1 className="mt-6 text-xl font-semibold text-slate-950">Missing signer email</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500">
-            The will contract could not be located. Please ensure you have the
-            correct link from the will owner.
+            Open this page from the signer invitation link so the signer email can be looked up on-chain.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!childAddress) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-10 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />
+          <h1 className="mt-6 text-xl font-semibold text-slate-950">Missing contract address</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-500">
+            Open this page with the will contract in the URL, for example
+            <span className="mx-1 font-mono">?contract=0x...</span>
           </p>
         </div>
       </div>
@@ -142,63 +188,124 @@ const SignInheritance = () => {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        {/* header */}
-        <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-            <ShieldCheck className="h-7 w-7 text-primary" />
-          </div>
-          <h1 className="mt-4 text-2xl font-bold text-slate-950">
-            Sign Inheritance
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            You've been designated as a signer for a ChainWill testament. Verify
-            your identity to attest.
-          </p>
-          {/* show email in header once we have it */}
-          {signerEmail && (
-            <p className="mt-1 text-xs text-primary font-medium">
-              {signerEmail}
+    <div className="min-h-screen bg-slate-50 px-4 py-12">
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <ShieldCheck className="h-7 w-7 text-primary" />
+            </div>
+            <h1 className="mt-4 text-2xl font-bold text-slate-950">Signer Attestation</h1>
+            <p className="mt-2 text-sm text-slate-500">
+              This page is for designated signers only. Admin must open attestation first, then signers execute the on-chain trigger.
             </p>
-          )}
+            <p className="mt-2 text-xs font-medium text-primary">{signerEmail}</p>
+          </div>
         </div>
 
-        {step !== "success" && <StepIndicator current={step} />}
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase text-slate-400">Owner Profile</p>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <p><span className="font-semibold text-slate-950">Name:</span> {ownerProfile?.name ?? "Loading..."}</p>
+              <p><span className="font-semibold text-slate-950">Email:</span> {ownerProfile?.email ?? "Loading..."}</p>
+              <p className="break-all"><span className="font-semibold text-slate-950">Wallet:</span> {ownerProfile?.wallet ?? "Loading..."}</p>
+            </div>
+          </div>
 
-        {step === "verify-email" && (
-          <StepVerifyEmail
-            signerEmail={signerEmail}
-            isSendingOtp={isSendingOtp}
-            onSend={handleSendOtp}
-          />
-        )}
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase text-slate-400">Signer Profile</p>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <p><span className="font-semibold text-slate-950">Name:</span> {signer?.name ?? "Loading..."}</p>
+              <p><span className="font-semibold text-slate-950">Email:</span> {signer?.email ?? signerEmail}</p>
+              <p className="break-all"><span className="font-semibold text-slate-950">Registered Wallet:</span> {signer?.wallet ?? "Loading..."}</p>
+            </div>
+          </div>
+        </div>
 
-        {step === "otp" && (
-          <StepOtp
-            signerEmail={signerEmail}
-            otpInput={otpInput}
-            otpError={otpError}
-            onOtpChange={setOtpInput}
-            onVerify={handleVerifyOtp}
-            onResend={handleResendOtp}
-          />
-        )}
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+              <UserCircle2 className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-950">Attestation Status</p>
+              {isLoading ? (
+                <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading signer details...
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>
+                    <span className="font-semibold text-slate-950">Attestation Open:</span>{" "}
+                    {attestation?.available ? "Yes" : "No"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-950">Signer Count:</span>{" "}
+                    {attestation ? `${Number(attestation.count)} / ${Number(attestation.required)}` : "Unavailable"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-950">Will Executed:</span>{" "}
+                    {willStatus?.triggered ? "Yes" : "No"}
+                  </p>
+                  {isConnected ? (
+                    <p className="break-all">
+                      <span className="font-semibold text-slate-950">Connected Wallet:</span> {address}
+                    </p>
+                  ) : null}
+                </div>
+              )}
 
-        {step === "attest" && (
-          <StepAttest
-            attestation={attestation}
-            isLoadingStatus={isLoadingStatus}
-            isAttesting={isAttesting}
-            onAttest={handleAttest}
-          />
-        )}
+              {!isConnected ? (
+                <div className="mt-6">
+                  <CustomConnectButton title="Connect Signer Wallet" className="w-full py-4" />
+                </div>
+              ) : null}
 
-        {step === "success" && <StepSuccess attestation={attestation} />}
+              {isConnected && signer && !walletMatchesSigner ? (
+                <div className="mt-6 rounded-3xl bg-amber-50 p-4 text-sm text-amber-700">
+                  Connect the registered signer wallet to attest. The current contract only accepts the signer wallet stored on-chain.
+                </div>
+              ) : null}
 
-        <p className="text-center text-xs text-slate-400">
-          Secured by ChainWill Protocol · On-chain attestation
-        </p>
+              {isConnected && willStatus?.triggered ? (
+                <div className="mt-6 rounded-3xl bg-emerald-50 p-4 text-sm text-emerald-700">
+                  Signer threshold has already been met. Beneficiary claim is now open.
+                </div>
+              ) : null}
+
+              {hasSubmittedInSession && !willStatus?.triggered ? (
+                <div className="mt-6 rounded-3xl bg-primary/5 p-4 text-sm text-slate-600">
+                  Your attestation was submitted in this session. Waiting for the remaining signer threshold to execute the will.
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void handleAttest()}
+                disabled={!canAttest || isSubmitting}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="h-4 w-4" />
+                    Attest and Execute Trigger
+                  </>
+                )}
+              </button>
+
+              <p className="mt-4 text-xs text-slate-400">
+                Attestation is only valid after admin opens the window. Once signer threshold is reached, the will executes and beneficiary claim becomes available.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

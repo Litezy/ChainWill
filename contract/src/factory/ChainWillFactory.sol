@@ -62,33 +62,39 @@ contract ChainWillFactory is IEvents {
     ///         token.approve(returnedWillAddress, desiredAmount)
     ///         to grant the will spending permission on their tokens.
     ///
-    /// @param signers          Trusted signer addresses (min 1)
+    /// @param signers          Trusted signer metadata (min 1)
+    /// @param ownerInfo        Owner metadata stored in the deployed will
     /// @return will            Address of the deployed ChainWill contract
     function createWill(
-        address[] memory signers
+        WillLib.SignerInput[] calldata signers,
+        WillLib.OwnerInfo calldata ownerInfo
     ) external returns (address will) {
         WillLib.SignerInput[] memory signerInputs = new WillLib.SignerInput[](signers.length);
         for (uint256 i = 0; i < signers.length; i++) {
-            signerInputs[i] = WillLib.SignerInput({
-                wallet: signers[i],
-                name: "",
-                email: ""
-            });
+            signerInputs[i] = signers[i];
         }
-        return createWill(signerInputs);
+
+        return _createWill(signerInputs, ownerInfo);
     }
 
-    function createWill(
-        WillLib.SignerInput[] memory signers
-    ) public returns (address will) {
-        require(signers.length   > 0,           "At least one signer required");
+    function _createWill(
+        WillLib.SignerInput[] memory signers,
+        WillLib.OwnerInfo memory ownerInfo
+    ) private returns (address will) {
+        require(signers.length > 1, "At least two signers required");
+        require(ownerInfo.wallet != address(0), "Invalid owner wallet");
+
+        if (ownerInfo.wallet != msg.sender) {
+            ownerInfo.wallet = msg.sender;
+        }
 
         will = address(new ChainWill(
             admin,
             signers,
-            2 minutes,
+            10 minutes,
             msg.sender,      // caller becomes the will owner
-            platformAddress  // platform fee recipient from factory
+            platformAddress, // platform fee recipient from factory
+            ownerInfo
         ));
 
         ownerWills[msg.sender].push(will);
