@@ -1,9 +1,15 @@
+// src/hooks/token/useERC20ReadCalls.ts
 import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "ethers";
 import { useAccount } from "wagmi";
 
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useTokenStore } from "@/stores/tokenStore";
+
+// ── module-level decimals cache — persists across renders, no extra RPC calls
+const decimalsCache = new Map<string, number>();
+
+const CWT_DECIMALS = 18; // hardcode known token decimals to skip RPC call entirely
 
 type UseTokenBalanceProps = {
   tokenAddress: string;
@@ -18,6 +24,24 @@ export const useTokenBalance = ({ tokenAddress, decimals }: UseTokenBalanceProps
   const [balance, setLocalBalance] = useState<string>("0");
   const [rawBalance, setRawBalance] = useState<bigint>(0n);
   const [isLoading, setIsLoading] = useState(false);
+
+  const resolveDecimals = useCallback(async (): Promise<number | null> => {
+    // 1. explicit prop wins
+    if (decimals !== undefined) return decimals;
+    // 2. module cache
+    if (decimalsCache.has(tokenAddress)) return decimalsCache.get(tokenAddress)!;
+    // 3. known CWT shortcut
+    if (tokenAddress.toLowerCase() === tokenAddress.toLowerCase()) {
+      decimalsCache.set(tokenAddress, CWT_DECIMALS);
+      return CWT_DECIMALS;
+    }
+    // 4. fallback RPC call
+    const result = await callReadFunction<number>("decimals", []);
+    if (result === null) return null;
+    const value = Number(result);
+    decimalsCache.set(tokenAddress, value);
+    return value;
+  }, [decimals, tokenAddress, callReadFunction]);
 
   const fetchBalance = useCallback(async () => {
     if (!address || !tokenAddress) return;
@@ -35,15 +59,11 @@ export const useTokenBalance = ({ tokenAddress, decimals }: UseTokenBalanceProps
 
       setRawBalance(result);
 
-      let tokenDecimals = decimals;
-      if (tokenDecimals === undefined) {
-        const decimalsResult = await callReadFunction<number>("decimals", []);
-        if (decimalsResult === null) {
-          setLocalBalance("0");
-          setStoredBalance(tokenAddress, "0");
-          return;
-        }
-        tokenDecimals = Number(decimalsResult);
+      const tokenDecimals = await resolveDecimals();
+      if (tokenDecimals === null) {
+        setLocalBalance("0");
+        setStoredBalance(tokenAddress, "0");
+        return;
       }
 
       const formatted = formatUnits(result, tokenDecimals);
@@ -57,18 +77,13 @@ export const useTokenBalance = ({ tokenAddress, decimals }: UseTokenBalanceProps
     } finally {
       setIsLoading(false);
     }
-  }, [address, tokenAddress, decimals, callReadFunction, setStoredBalance]);
+  }, [address, tokenAddress, callReadFunction, resolveDecimals, setStoredBalance]);
 
   useEffect(() => {
     fetchBalance();
   }, [fetchBalance]);
 
-  return {
-    balance,
-    rawBalance,
-    isLoading,
-    refetch: fetchBalance,
-  };
+  return { balance, rawBalance, isLoading, refetch: fetchBalance };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,6 +107,16 @@ export const useTokenAllowance = ({
   const [rawAllowance, setRawAllowance] = useState<bigint>(0n);
   const [isLoading, setIsLoading] = useState(false);
 
+  const resolveDecimals = useCallback(async (): Promise<number | null> => {
+    if (decimals !== undefined) return decimals;
+    if (decimalsCache.has(tokenAddress)) return decimalsCache.get(tokenAddress)!;
+    const result = await callReadFunction<number>("decimals", []);
+    if (result === null) return null;
+    const value = Number(result);
+    decimalsCache.set(tokenAddress, value);
+    return value;
+  }, [decimals, tokenAddress, callReadFunction]);
+
   const fetchAllowance = useCallback(async () => {
     if (!address || !tokenAddress || !spenderAddress) return;
 
@@ -108,15 +133,11 @@ export const useTokenAllowance = ({
 
       setRawAllowance(result);
 
-      let tokenDecimals = decimals;
-      if (tokenDecimals === undefined) {
-        const decimalsResult = await callReadFunction<number>("decimals", []);
-        if (decimalsResult === null) {
-          setLocalAllowance("0");
-          setStoredAllowance(tokenAddress, spenderAddress, "0");
-          return;
-        }
-        tokenDecimals = Number(decimalsResult);
+      const tokenDecimals = await resolveDecimals();
+      if (tokenDecimals === null) {
+        setLocalAllowance("0");
+        setStoredAllowance(tokenAddress, spenderAddress, "0");
+        return;
       }
 
       const formatted = formatUnits(result, tokenDecimals);
@@ -130,16 +151,11 @@ export const useTokenAllowance = ({
     } finally {
       setIsLoading(false);
     }
-  }, [address, tokenAddress, spenderAddress, decimals, callReadFunction, setStoredAllowance]);
+  }, [address, tokenAddress, spenderAddress, callReadFunction, resolveDecimals, setStoredAllowance]);
 
   useEffect(() => {
     fetchAllowance();
   }, [fetchAllowance]);
 
-  return {
-    allowance,
-    rawAllowance,
-    isLoading,
-    refetch: fetchAllowance,
-  };
+  return { allowance, rawAllowance, isLoading, refetch: fetchAllowance };
 };
