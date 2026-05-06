@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useAssertChain } from "./useAssertChain";
 import { errorMessage } from "@/utils/messageStatus";
 import { useCallContract } from "./useContractCall";
@@ -12,30 +13,33 @@ export const useCallWriteMethods = (
   const { writeContract, assertContract } = useCallContract(type, contractAddress);
   const { assertChain } = useAssertChain();
 
-  const callWriteFunction = async (
-    method: string,
-    args: any[],
-    gas: bigint
-  ): Promise<WriteResult> => {
-    if (!assertChain()) return { success: false, receipt: null };
-    if (!assertContract(true)) return { success: false, receipt: null };
+  const callWriteFunction = useCallback(
+    async (
+      method: string,
+      args: any[],
+      gas: bigint
+    ): Promise<WriteResult> => {
+      if (!assertChain()) return { success: false, receipt: null };
+      if (!assertContract(true)) return { success: false, receipt: null };
 
-    if (!writeContract) {
-      errorMessage("Contract not found");
-      return { success: false, receipt: null };
-    }
+      if (!writeContract) {
+        errorMessage("Contract not found");
+        return { success: false, receipt: null };
+      }
 
-    try {
-      const tx = await writeContract[method](...args, { gasLimit: gas });
-      const receipt = await tx.wait();
+      try {
+        const tx = await writeContract[method](...args, { gasLimit: gas });
+        const receipt = await tx.wait();
 
-      if (receipt.status === 1) return { success: true, receipt };
-      return { success: false, receipt: null };
-    } catch (error: any) {
-      handleContractError(error);
-      return { success: false, receipt: null };
-    }
-  };
+        if (receipt.status === 1) return { success: true, receipt };
+        return { success: false, receipt: null };
+      } catch (error: any) {
+        handleContractError(error);
+        return { success: false, receipt: null };
+      }
+    },
+    [assertChain, assertContract, writeContract]
+  );
 
   return { callWriteFunction };
 };

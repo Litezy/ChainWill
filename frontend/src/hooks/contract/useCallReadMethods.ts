@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { handleContractError } from "@/error/handleError";
 import { errorMessage } from "@/utils/messageStatus";
 import { useCallContract } from "./useContractCall";
@@ -8,7 +9,7 @@ export const useCallReadMethods = (
 ) => {
   const { assertContract, readContract } = useCallContract(type, childAddress);
 
-  const callReadFunction = async <T = unknown>(
+  const callReadFunction = useCallback(async <T = unknown>(
     method: string,
     args: unknown[],
   ): Promise<T | null> => {
@@ -24,7 +25,7 @@ export const useCallReadMethods = (
       handleContractError(error);
       return null;
     }
-  };
+  }, [assertContract, readContract]);
 
   return { callReadFunction };
 };

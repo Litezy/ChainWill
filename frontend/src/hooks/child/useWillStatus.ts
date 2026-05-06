@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+
+import { useCallback, useEffect } from "react";
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useWillStatusStore } from "@/stores/willStatusStore";
 import { useContractStore } from "@/stores/contractStore";
@@ -15,6 +16,9 @@ type RawWillStatus = {
   finalPool: bigint;
 };
 
+// ── module-level in-flight guard — shared across ALL hook instances ───────────
+let isFetching = false;
+
 export const useWillStatus = (childAddress?: string) => {
   const storedAddress = useContractStore((s) => s.contractAddress);
   const resolvedAddress = childAddress ?? storedAddress ?? undefined;
@@ -25,40 +29,43 @@ export const useWillStatus = (childAddress?: string) => {
   const setLoading = useWillStatusStore((state) => state.setLoading);
   const setError = useWillStatusStore((state) => state.setError);
 
-  const fetchWillStatus = async () => {
-    if (!resolvedAddress) return; // no address yet — skip silently
+  const fetchWillStatus = useCallback(async () => {
+    if (!resolvedAddress) return;
+
+    // ── skip if another instance is already fetching ──────────────────
+    if (isFetching) return;
+    isFetching = true;
 
     try {
       setLoading(true);
       setError(null);
 
-      const result = await callReadFunction("getWillStatus", []);
+      const result = await callReadFunction<RawWillStatus>("getWillStatus", []);
       if (!result) return;
 
-      const status = result as RawWillStatus;
-
       setWillStatus({
-        approvedAmount: status.approvedAmount.toString(),
-        ownerWalletBalance: status.ownerWalletBalance.toString(),
-        effectivePullAmount: status.effectivePullAmount.toString(),
-        timeRemaining: Number(status.timeRemaining),
-        attestationOpensAt: Number(status.attestationOpensAt),
-        triggerUnlocksAt: Number(status.triggerUnlocksAt),
-        triggered: status.triggered,
-        locked: status.locked,
-        finalPool: status.finalPool.toString(),
+        approvedAmount: result.approvedAmount.toString(),
+        ownerWalletBalance: result.ownerWalletBalance.toString(),
+        effectivePullAmount: result.effectivePullAmount.toString(),
+        timeRemaining: Number(result.timeRemaining),
+        attestationOpensAt: Number(result.attestationOpensAt),
+        triggerUnlocksAt: Number(result.triggerUnlocksAt),
+        triggered: result.triggered,
+        locked: result.locked,
+        finalPool: result.finalPool.toString(),
       });
     } catch (error) {
       console.error("Failed to fetch will status:", error);
       setError(error instanceof Error ? error.message : "Failed to fetch will status");
     } finally {
       setLoading(false);
+      isFetching = false; // ← release lock
     }
-  };
+  }, [resolvedAddress, callReadFunction, setWillStatus, setLoading, setError]);
 
   useEffect(() => {
     fetchWillStatus();
-  }, [resolvedAddress, refreshKey]);
+  }, [fetchWillStatus, refreshKey]);
 
   return { refetch: fetchWillStatus };
 };
