@@ -11,6 +11,8 @@ contract TriggerModuleTest is Test {
     ChainWill        will;
     MockERC20        token;
 
+    address constant TOKEN = 0x9b068dC0418064C11d9bc563edC26890DD95a60e;
+
     address owner    = makeAddr("owner");
     address signer1  = makeAddr("signer1");
     address platform = makeAddr("platform");
@@ -20,7 +22,8 @@ contract TriggerModuleTest is Test {
 
     function setUp() public {
         factory = new ChainWillFactory(platform);
-        token   = new MockERC20();
+        vm.etch(TOKEN, type(MockERC20).runtimeCode);
+        token = MockERC20(TOKEN);
 
         // tokens stay in owner's wallet
         token.mint(owner, DEPOSIT);
@@ -38,34 +41,32 @@ contract TriggerModuleTest is Test {
 
         // add a beneficiary
         vm.prank(owner);
-        will.addBeneficiary(ben, 10_000);
+        will.addBeneficiary(ben, 10_000, "", "", "");
     }
 
     function test_triggerByTime() public {
         // warp past inactivity period + grace period
         vm.warp(block.timestamp + 365 days + 7 days + 1);
 
-        vm.prank(signer1);
         will.triggerByTime();
 
-        // will is now triggered and locked
-        assertTrue(will.isTriggered());
-        assertTrue(will.isLocked());
+        // attestation is open, but the will itself is not yet triggered.
+        assertFalse(will.isTriggered());
+        assertFalse(will.isLocked());
 
-        // tokens were pulled from owner's wallet into the contract
-        assertEq(token.balanceOf(owner),        0);
-        assertEq(token.balanceOf(address(will)), DEPOSIT - (DEPOSIT * 50 / 10_000));
+        (bool available,,) = will.getAttestationStatus();
+        assertTrue(available);
 
-        // finalPool = DEPOSIT - 0.5% fee
-        uint256 fee       = (DEPOSIT * 50) / 10_000;
-        uint256 finalPool = DEPOSIT - fee;
-        assertEq(will.getFinalPool(), finalPool);
-
-        // platform received the fee
-        assertEq(token.balanceOf(platform), fee);
+        // no tokens are pulled until a signer triggers the will.
+        assertEq(token.balanceOf(owner), DEPOSIT);
+        assertEq(token.balanceOf(address(will)), 0);
+        assertEq(will.getFinalPool(), 0);
     }
 
     function test_triggerBySigners_pulls_funds() public {
+        vm.warp(block.timestamp + 365 days + 7 days + 1);
+        will.triggerByTime();
+
         vm.prank(signer1);
         will.triggerBySigners();
 
@@ -104,42 +105,41 @@ contract TriggerModuleTest is Test {
         assertEq(will.getEffectivePullAmount(), 60e18);
 
         vm.warp(block.timestamp + 365 days + 7 days + 1);
-        vm.prank(signer1);
         will.triggerByTime();
 
-        // only 60e18 was pulled
-        uint256 fee = (60e18 * 50) / 10_000;
-        assertEq(will.getFinalPool(), 60e18 - fee);
+        // triggerByTime only opens attestation; no funds are pulled yet.
+        assertEq(will.getFinalPool(), 0);
+        (bool available,,) = will.getAttestationStatus();
+        assertTrue(available);
     }
 
     // ── negative ──────────────────────────────────────────────────────────
 
     function test_revert_triggerTooEarly() public {
-        vm.prank(signer1);
         vm.expectRevert("Too early as inactivity period not elapsed");
         will.triggerByTime();
     }
 
-    function test_revert_triggerTwice() public {
+    function test_repeat_triggerByTime_opens_attestation() public {
         vm.warp(block.timestamp + 365 days + 7 days + 1);
-        vm.prank(signer1);
+        will.triggerByTime();
         will.triggerByTime();
 
-        vm.prank(signer1);
-        vm.expectRevert("Will already triggered");
-        will.triggerByTime();
+        (bool available,,) = will.getAttestationStatus();
+        assertTrue(available);
     }
 
-    function test_revert_trigger_noApproval() public {
+    function test_triggerByTime_opens_attestation_even_without_approval() public {
         // revoke approval
         vm.prank(owner);
         token.approve(address(will), 0);
 
         vm.warp(block.timestamp + 365 days + 7 days + 1);
 
-        vm.prank(signer1);
-        vm.expectRevert("Owner has not approved any funds");
         will.triggerByTime();
+
+        (bool available,,) = will.getAttestationStatus();
+        assertTrue(available);
     }
 
     function test_revert_trigger_noBeneficiaries() public {
@@ -156,15 +156,14 @@ contract TriggerModuleTest is Test {
 
         vm.warp(block.timestamp + 365 days + 7 days + 1);
 
-        vm.prank(signer1);
         vm.expectRevert("No beneficiaries set");
         will2.triggerByTime();
     }
 
-    function test_revert_strangerTrigger() public {
+    function test_revert_notAdminTrigger() public {
         vm.warp(block.timestamp + 365 days + 7 days + 1);
         vm.prank(makeAddr("stranger"));
-        vm.expectRevert("Not a signer");
+        vm.expectRevert("Not Admin");
         will.triggerByTime();
     }
 }

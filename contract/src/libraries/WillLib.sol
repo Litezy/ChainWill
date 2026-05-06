@@ -12,6 +12,24 @@ library WillLib {
         uint256 percent;      // share in basis points (10000 = 100%)
         bool    claimed;      // has this beneficiary claimed?
         uint256 claimedAt;    // timestamp of claim
+        string name;
+        string email;
+        string role;
+    }
+
+    struct Signer {
+        uint256 id;
+        address wallet;       // signer wallet address
+        bool    signed;      // has this signer attested?
+        uint256 signedAt;    // timestamp of attestation
+        string name;
+        string email;
+    }
+
+    struct SignerInput {
+        address wallet;
+        string name;
+        string email;
     }
 
     // ─────────────────────────────────────────────
@@ -47,7 +65,7 @@ library WillLib {
         bool lockedReentrancy;          // prevents reentrancy on claim
 
         // ── MULTISIG SIGNERS ──────────────────────
-        address[] signers;                          // list of signer addresses
+        Signer[] signers;                           // list of signer structs
         mapping(address => bool) isSigner;          // is this address a signer?
         mapping(address => bool) hasSigned;         // has this signer attested?
         bool attestationOpen;                // window to check if signers can start signing

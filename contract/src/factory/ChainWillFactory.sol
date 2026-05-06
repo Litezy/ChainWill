@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "../core/ChainWill.sol";
 import "../interfaces/IEvents.sol";
+import "../libraries/WillLib.sol";
 
 /// @title ChainWillFactory
 /// @notice Deploys and tracks ChainWill instances.
@@ -66,6 +67,20 @@ contract ChainWillFactory is IEvents {
     function createWill(
         address[] memory signers
     ) external returns (address will) {
+        WillLib.SignerInput[] memory signerInputs = new WillLib.SignerInput[](signers.length);
+        for (uint256 i = 0; i < signers.length; i++) {
+            signerInputs[i] = WillLib.SignerInput({
+                wallet: signers[i],
+                name: "",
+                email: ""
+            });
+        }
+        return createWill(signerInputs);
+    }
+
+    function createWill(
+        WillLib.SignerInput[] memory signers
+    ) public returns (address will) {
         require(signers.length   > 0,           "At least one signer required");
 
         will = address(new ChainWill(
