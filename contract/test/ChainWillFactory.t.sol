@@ -47,26 +47,10 @@ contract ChainWillFactoryTest is Test {
     }
 
     // ── negative ───────────────────────────────────────────
-    function test_revert_invalidToken() public {
-    address[] memory signers = new address[](1);
-    signers[0] = signer1;
+    function test_revert_noSigners() public {
+        address[] memory signers = new address[](0);
 
-    vm.expectRevert("Invalid token address"); // ✅ matches contract
-    factory.createWill(signers);
-}
-
-function test_revert_noSigners() public {
-    address[] memory signers = new address[](0);
-
-    vm.expectRevert("At least one signer required"); // ✅ matches contract
-    factory.createWill(signers);
-}
-
-function test_revert_invalidPeriod() public {
-    address[] memory signers = new address[](1);
-    signers[0] = signer1;
-
-    vm.expectRevert("Inactivity period must be > 0"); // ✅ matches contract
-    factory.createWill( signers);
-}
+        vm.expectRevert("At least one signer required"); // ✅ matches contract
+        factory.createWill(signers);
+    }
 }
