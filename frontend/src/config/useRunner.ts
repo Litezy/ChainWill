@@ -45,3 +45,16 @@ const useRunners = () => {
 }
 
 export default useRunners
+
+
+// const [signer, setSigner] = useState<Signer | undefined>(undefined)
+
+// useEffect(() => {
+//   if (!provider) return // ← just return, don't setState
+
+//   let cancelled = false
+//   provider.getSigner().then((s) => {
+//     if (!cancelled) setSigner(s)
+//   })
+//   return () => { cancelled = true }
+// }, [provider])

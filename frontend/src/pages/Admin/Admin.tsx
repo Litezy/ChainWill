@@ -7,11 +7,10 @@ import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
 import { useWillStatusStore } from "@/stores/willStatusStore";
 import {
   dismissToast,
-  errorMessage,
   loadingMessage,
   successMessage,
 } from "@/utils/messageStatus";
-import { formatCountdown, formatUnixDateTime, getSecondsUntil } from "@/utils/willStatus";
+import { formatCountdown, formatUnixDateTime } from "@/utils/willStatus";
 
 const ADMIN_WALLET = "0x776033F935cBb708891b1353F596725f9FfE632b";
 const CHILD_CONTRACT = "0x72368398a14d3F7b22a41f030F538Ac2890Ea54d";
@@ -80,11 +79,11 @@ const AdminDashboard = () => {
   const locked = useWillStatusStore((s) => s.locked);
   const triggerUnlocksAt = useWillStatusStore((s) => s.triggerUnlocksAt);
   const attestationOpensAt = useWillStatusStore((s) => s.attestationOpensAt);
-  const timeRemaining = useWillStatusStore((s) => s.timeRemaining);
-  const lastUpdatedAt = useWillStatusStore((s) => s.lastUpdatedAt);
+  // const timeRemaining = useWillStatusStore((s) => s.timeRemaining);
+  // const lastUpdatedAt = useWillStatusStore((s) => s.lastUpdatedAt);
   const finalPool = useWillStatusStore((s) => s.finalPool);
 
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [isTriggering, setIsTriggering] = useState(false);
 
   useEffect(() => {

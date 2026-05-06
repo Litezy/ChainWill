@@ -32,7 +32,7 @@ const Settings = () => {
   const triggered = useWillStatusStore((state) => state.triggered);
   const locked = useWillStatusStore((state) => state.locked);
   const lastUpdatedAt = useWillStatusStore((state) => state.lastUpdatedAt);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [gracePeriodDays, setGracePeriodDays] = useState("");
   const [isUpdatingGracePeriod, setIsUpdatingGracePeriod] = useState(false);
 

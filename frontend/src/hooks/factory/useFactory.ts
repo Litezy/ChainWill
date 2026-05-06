@@ -1,11 +1,13 @@
+import { useContractCaller } from '@/config/contracts'
 import {
   useReadContract,
   useAccount,
 } from 'wagmi'
-import { factoryContractConfig } from '@/config/contracts'
+
 
 // ── READ: get all wills by owner ──────────────────────────────────────
 export function useOwnerWills() {
+  const {factoryContractConfig} = useContractCaller()
   const { address } = useAccount()
 
   return useReadContract({
@@ -20,6 +22,7 @@ export function useOwnerWills() {
 
 // ── READ: total wills deployed ────────────────────────────────────────
 export function useTotalWills() {
+   const {factoryContractConfig} = useContractCaller()
   return useReadContract({
     ...factoryContractConfig,
     functionName: 'totalWills',

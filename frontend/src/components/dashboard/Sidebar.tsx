@@ -1,25 +1,20 @@
-import { LayoutGrid, Users, UserCheck, Settings, Wallet, LogOut } from "lucide-react";
+import {  LogOut } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useDisconnect } from "wagmi";
 import { useNavigate } from "react-router-dom";
 import { useContractStore } from "@/stores/contractStore";
 import { useState } from "react";
 import ConfirmModal from "@/modals/ConfirmModal";
+import { dashboardNavItems } from "./sidebarConfig";
 
-export const dashboardNavItems = [
-  { label: "Overview", icon: LayoutGrid, to: "/auth/overview" },
-  { label: "Assets", icon: Wallet, to: "/auth/assets" },
-  { label: "Beneficiaries", icon: Users, to: "/auth/beneficiaries" },
-  { label: "Signers", icon: UserCheck, to: "/auth/signers" },
-  { label: "Settings", icon: Settings, to: "/auth/settings" },
-];
+
 
 
 
 export default function Sidebar() {
   const storedAddress = useContractStore((s) => s.contractAddress);
 const contractAddress =
-  storedAddress.slice(0, 6) + "..." + storedAddress.slice(-4);
+  storedAddress!.slice(0, 6) + "..." + storedAddress!.slice(-4);
   const { disconnect } = useDisconnect();
   const [logout,setLogout] = useState(false);
 

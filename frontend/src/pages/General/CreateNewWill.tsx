@@ -19,11 +19,14 @@ type TokenOption = {
   label: string;
 };
 
+type CreateNewWillProps = {
+  onClose?: () => void
+}
 const tokenOptions: TokenOption[] = [
   { symbol: "CWT", label: "ChainWill Token (CWT)" },
 ];
 
-const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
+const CreateNewWill:React.FC<CreateNewWillProps> = ({ onClose }) => {
   const walletBalance = useWillStatusStore((state) => state.ownerWalletBalance);
   const displayBalance = formatCompact(formatUnits(walletBalance, 18));
   const { createWill, isSubmitting } = useCreateWill();
@@ -152,10 +155,9 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
       const success = await createWill({
         ownerName,
         ownerEmail,
-        token: selectedToken.symbol,
         signers,
       });
-      if (success) onClose();
+      if (success) onClose!();
     }
   };
 
