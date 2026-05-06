@@ -18,8 +18,17 @@ export const useCallReadMethods = (
       errorMessage("Contract not found");
       return null;
     }
+
     try {
-      const data = await readContract[method](...args);
+      const contractMethod =
+        (readContract as any)[method] ??
+        (readContract as any).functions?.[method];
+
+      if (typeof contractMethod !== "function") {
+        throw new Error(`Contract method '${method}' is not available`);
+      }
+
+      const data = await contractMethod(...args);
       return data as T;
     } catch (error: unknown) {
       handleContractError(error);

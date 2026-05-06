@@ -13,6 +13,9 @@ type RawWillStatus = {
   triggerUnlocksAt: bigint;
   triggered: boolean;
   locked: boolean;
+  inactivityPeriod: bigint;
+  lastCheckIn: bigint;
+  gracePeriod: bigint;
   finalPool: bigint;
 };
 
@@ -43,6 +46,7 @@ export const useWillStatus = (childAddress?: string) => {
       const result = await callReadFunction<RawWillStatus>("getWillStatus", []);
       if (!result) return;
 
+
       setWillStatus({
         approvedAmount: result.approvedAmount.toString(),
         ownerWalletBalance: result.ownerWalletBalance.toString(),
@@ -52,6 +56,9 @@ export const useWillStatus = (childAddress?: string) => {
         triggerUnlocksAt: Number(result.triggerUnlocksAt),
         triggered: result.triggered,
         locked: result.locked,
+        inactivityPeriod: Number(result.inactivityPeriod),
+        lastCheckIn: Number(result.lastCheckIn),
+        gracePeriod: Number(result.gracePeriod),
         finalPool: result.finalPool.toString(),
       });
     } catch (error) {

@@ -25,12 +25,17 @@ contract SignerModuleTest is Test {
         token = MockERC20(TOKEN);
         token.mint(owner, 1000e18);
 
-        address[] memory signers = new address[](2);
-        signers[0] = signer1;
-        signers[1] = signer2;
+        WillLib.SignerInput[] memory signers = new WillLib.SignerInput[](2);
+        signers[0] = WillLib.SignerInput({wallet: signer1, name: "", email: ""});
+        signers[1] = WillLib.SignerInput({wallet: signer2, name: "", email: ""});
+        WillLib.OwnerInfo memory ownerInfo = WillLib.OwnerInfo({
+            name: "",
+            email: "",
+            wallet: owner
+        });
 
         vm.prank(owner);
-        address willAddr = factory.createWill( signers);
+        address willAddr = factory.createWill(signers, ownerInfo);
         will = ChainWill(willAddr);
 
         vm.prank(owner);

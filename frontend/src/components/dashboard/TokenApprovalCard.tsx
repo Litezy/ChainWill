@@ -87,9 +87,12 @@ export default function TokenApprovalCard() {
         normalizedAmount
       );
       setApprovedToken(
+        storedAddress!,
         CHAINWILL_TOKEN_CONTRACT_ADDRESS,
         "CWT",
         normalizedAmount,
+        storedAddress!,
+        address,
         storedAddress!
       );
       addApprovalHistory({
@@ -98,6 +101,9 @@ export default function TokenApprovalCard() {
         asset: "CWT",
         tokenAddress: CHAINWILL_TOKEN_CONTRACT_ADDRESS,
         spender: storedAddress!,
+        contractAddress: storedAddress!,
+        willAddress: storedAddress!,
+        ownerAddress: address,
         amount: normalizedAmount,
         status: "success",
         date: new Date().toLocaleDateString("en-US", {

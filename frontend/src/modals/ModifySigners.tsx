@@ -1,36 +1,63 @@
+import { useState } from "react";
+import { X } from "lucide-react";
+import ModalLayout from "@/layouts/ModalLayout";
+import FormInput from "@/components/FormInput";
+import type { SignerRecord } from "@/stores/signerStore";
 
-import { useState } from 'react';
-import { X } from 'lucide-react';
-import ModalLayout from '@/layouts/ModalLayout';
-import FormInput from '@/components/FormInput';
-
-type AddSignerPayload = {
+type UpdateSignerPayload = {
+  oldSigner: string;
+  newSigner: string;
   name: string;
-  address: string;
   email: string;
 };
 
-const ModifySigners = ({
-  onClose,
-  onAddSigner,
-}: {
+type ModifySignersProps = {
+  signer: SignerRecord;
   onClose: () => void;
-  onAddSigner: (signer: AddSignerPayload) => void;
-}) => {
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [email, setEmail] = useState('');
+  onUpdateSigner: (payload: UpdateSignerPayload) => Promise<boolean>;
+  isSubmitting: boolean;
+};
 
-  const handleSubmit = () => {
-    if (!name.trim() || !address.trim() || !email.trim()) {
+const ModifySigners = ({
+  signer,
+  onClose,
+  onUpdateSigner,
+  isSubmitting,
+}: ModifySignersProps) => {
+  const [name, setName] = useState(signer.name);
+  const [address, setAddress] = useState(signer.wallet);
+  const [email, setEmail] = useState(signer.email);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    const trimmedName = name.trim();
+    const trimmedAddress = address.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName || !trimmedAddress || !trimmedEmail) {
+      setError("All fields are required.");
+      return;
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmedAddress)) {
+      setError("Invalid wallet address.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      setError("Invalid email address.");
       return;
     }
 
-    onAddSigner({
-      name: name.trim(),
-      address: address.trim(),
-      email: email.trim(),
+    setError("");
+    const success = await onUpdateSigner({
+      oldSigner: signer.wallet,
+      newSigner: trimmedAddress,
+      name: trimmedName,
+      email: trimmedEmail,
     });
+
+    if (success) {
+      onClose();
+    }
   };
 
   return (
@@ -38,10 +65,18 @@ const ModifySigners = ({
       <div className="rounded-t-2xl bg-white px-6 pb-6 pt-5 sm:rounded-2xl sm:p-8">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase text-slate-500">Modify trusted signer</p>
-            <h2 className="mt-2 text-xl font-semibold text-slate-950">Modify Signer Thorne</h2>
+            <p className="text-sm font-semibold uppercase text-slate-500">
+              Modify trusted signer
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-950">
+              Replace or edit {signer.name}
+            </h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -73,10 +108,11 @@ const ModifySigners = ({
             helperText="This email will be used to notify the signer when the owner is unavailable."
           />
 
-
           <div className="rounded-3xl bg-amber-50 p-4 text-sm text-amber-700">
-            Reminder emails are only used for notification and do not grant on-chain authority.
+            Replacing a signer updates the on-chain signer wallet, name, and email in one transaction.
           </div>
+
+          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
         </div>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -90,9 +126,10 @@ const ModifySigners = ({
           <button
             type="button"
             onClick={handleSubmit}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90"
+            disabled={isSubmitting}
+            className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Save
+            {isSubmitting ? "Saving..." : "Save"}
           </button>
         </div>
       </div>

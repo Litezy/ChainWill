@@ -1,15 +1,15 @@
 import { Contract } from "ethers";
-import chainWillAbi from "@/ABI/chainWIllAbi"
-import FACTORY_ABI from "@/ABI/factoryAbi"
+import {chainWillAbi} from "@/ABI/chainWillAbi"
+import {FACTORY_ABI} from "@/ABI/factoryAbi"
 import { FACTORY_CONTRACT_ADDRESS } from "@/constants/contract";
 import { useContractStore } from "@/stores/contractStore";
-import type { Abi } from "viem"
+// import type { Abi } from "viem"
 
 export const useContractCaller = () => {
   const storedAddress = useContractStore((s) => s.contractAddress);
   const factoryContractConfig = {
     address: FACTORY_CONTRACT_ADDRESS,
-    abi: FACTORY_ABI as Abi,
+    abi: FACTORY_ABI ,
   } as const;
 
   const FactoryContract = (signerOrProvider: any) => new Contract(

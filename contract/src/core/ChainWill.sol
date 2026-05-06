@@ -40,7 +40,8 @@ contract ChainWill is
         WillLib.SignerInput[] memory _signers,
         uint256   _inactivityPeriod,
         address   _owner,
-        address   _platformAddress
+        address   _platformAddress,
+        WillLib.OwnerInfo memory _ownerInfo
     ) {
         // ── validate inputs ───────────────────────────────────────────
         require(_owner           != address(0), "Invalid owner address");
@@ -55,9 +56,10 @@ contract ChainWill is
         s.token           = address(0x9b068dC0418064C11d9bc563edC26890DD95a60e);
         s.platformAddress = _platformAddress;
         s.inactivityPeriod = _inactivityPeriod;
-        s.gracePeriod     = 15 minutes;         // default 15mins grace period
+        s.gracePeriod     = 5 minutes;         // default 15mins grace period
         s.lastCheckIn     = block.timestamp; // owner starts with full period
         s.PLATFORM_FEE_BP = 50;             // 0.5% = 50 basis points
+        s.ownerInfo = _ownerInfo;
 
         // ── register signers ──────────────────────────────────────────
         for (uint256 i = 0; i < _signers.length; i++) {
@@ -135,6 +137,16 @@ contract ChainWill is
     /// @notice Returns the will owner address.
     function getOwner() external view returns (address) {
         return s.owner;
+    }
+
+    /// @notice Returns the stored owner profile fields set at deployment.
+    function getOwnerProfile()
+        external
+        view
+        returns (string memory name, string memory email, address wallet)
+    {
+        WillLib.OwnerInfo storage ownerInfo = s.ownerInfo;
+        return (ownerInfo.name, ownerInfo.email, ownerInfo.wallet);
     }
 
     /// @notice Returns the ERC20 token address this will covers.
