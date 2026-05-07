@@ -1,0 +1,569 @@
+================================================================================
+  CHAINWILL — PRODUCT REQUIREMENTS DOCUMENT (PRD)
+  Version 1.0 | May 2026
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. PRODUCT OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ChainWill is a decentralized, non-custodial digital inheritance protocol built on
+EVM-compatible blockchains. It enables individuals to create legally enforceable
+on-chain wills that automatically distribute crypto assets to designated
+beneficiaries upon verifiable inactivity — without requiring any third-party
+custodian, lawyer, or centralized intermediary.
+
+The protocol replaces traditional paper-based inheritance with smart contract
+logic: the testator (will owner) simply approves a token amount from their
+existing wallet. No deposits are made. When the will is executed, beneficiaries
+claim their share directly from the smart contract using their registered wallet
+and identity-verified email OTP.
+
+Core Value Proposition:
+  - Trustless execution: Logic is code, not promises
+  - Non-custodial: Assets never leave the owner's wallet until execution
+  - Identity-secured: Multi-step OTP + wallet verification for all parties
+  - Transparent: All allocation percentages and roles are publicly verifiable on-chain
+  - Accessible: No blockchain expertise required to create or claim a will
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. PROBLEM STATEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The global crypto inheritance gap is a growing crisis:
+  - An estimated $140B+ in crypto assets are permanently inaccessible due to
+    the death of holders with no recovery plan
+  - Traditional wills are paper-based, jurisdiction-dependent, and routinely
+    contested — taking months or years to settle
+  - Existing crypto wallets offer no built-in inheritance mechanism
+  - Centralized custodians introduce counterparty risk and privacy violations
+  - Crypto-native users distrust intermediaries and require trustless solutions
+
+ChainWill addresses all of these gaps in a single, unified protocol.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. USER ROLES & STAKEHOLDERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3.1 Will Owner (Testator)
+  - The individual whose assets are covered by the will
+  - Creates and manages the will via the dashboard
+  - Sets allocation percentages for each beneficiary
+  - Designates trusted signers (guardians)
+  - Approves the CWT token amount that constitutes the inheritance pool
+  - Can update will parameters while the will has not been triggered
+  - Receives confirmation email upon successful will deployment
+
+3.2 Signers (Guardians / Attestors)
+  - Trusted individuals (e.g. family members, legal advisors, close friends)
+  - Responsible for attesting that the owner is genuinely inactive
+  - Must complete email OTP verification before signing
+  - Multisig threshold required: 2-of-N signers must attest before execution
+  - Receive notification emails when admin opens the attestation window
+  - Can be replaced by the owner on-chain if a guardian becomes unavailable
+
+3.3 Admin
+  - The ChainWill protocol operator wallet (hardcoded on-chain)
+  - Responsible for initiating the trigger process via "triggerByTime"
+  - Monitors owner inactivity and locks the will when conditions are met
+  - Triggers signer notification emails after execution is initiated
+  - Cannot unilaterally execute — signer threshold must still be met
+  - Accesses the admin panel via a URL-parameterized interface
+
+3.4 Beneficiaries
+  - Individuals who receive asset allocations from the will
+  - Each has a registered wallet address and email on-chain
+  - Must verify identity via email OTP before claiming
+  - Must connect the exact registered wallet to claim
+  - Can optionally request a wallet address change (2-step: request + confirm)
+  - Receive notification emails with claim links when signers reach threshold
+  - Claim amount is calculated as: (finalPool × allocationPercent) / 10,000
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. PRODUCT ARCHITECTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4.1 Smart Contract Layer
+
+  Factory Contract:
+    - Singleton contract deployed on-chain
+    - Creates individual "child" will contracts per owner wallet
+    - Tracks all deployed wills per owner via getWillsByOwner(address) → string[]
+    - Owner can have multiple wills; the most recently deployed is the active one
+
+  Child Will Contract (per owner):
+    - Stores the complete will configuration on-chain
+    - Read functions:
+        getWillStatus()         → Full lifecycle status (triggered, locked, finalPool, timings)
+        getBeneficiaries()      → All registered beneficiaries with wallet, email, percent, claimed
+        getSignersWithDetails() → All registered signers with name, email, wallet, signed status
+        getOwnerProfile()       → Owner name, email, wallet
+        getToken()              → ERC-20 token contract address (CWT)
+        getAttestationStatus()  → Current count of signatures vs required threshold
+    - Write functions:
+        triggerByTime()         → Admin only — initiates will execution
+        sign()                  → Signer — casts attestation vote
+        claim(beneficiaryId)    → Beneficiary — claims inheritance allocation
+        requestWalletChange()   → Beneficiary — step 1 of wallet address update
+        confirmWalletChange()   → Beneficiary — step 2 of wallet address update
+        replaceSigner()         → Owner — replaces a guardian on-chain
+
+  Token Contract (CWT — ChainWill Token):
+    - ERC-20 standard, 18 decimal places
+    - Symbol: CWT
+    - Used as the inheritance pool currency
+    - Owner approves an amount; the child contract pulls it at execution time
+    - No deposit required pre-execution; approval is sufficient
+
+4.2 Backend / Off-Chain Layer
+
+  Email Notification Service:
+    - REST API consumed by the frontend
+    - Three notification types:
+        "owner"       → Sent after will deployment; confirms contract address
+        "signer"      → Sent to all signers after admin triggers the will
+        "beneficiary" → Sent to all beneficiaries after signer threshold is met
+    - Each notification type carries contextual data (names, emails, contract address)
+
+  OTP Service:
+    - Issues time-limited one-time passwords sent to email
+    - Two audiences:
+        "signer"      → Guards the attestation action in SignInheritance page
+        "beneficiary" → Guards the claim action in ClaimInheritance page
+    - Endpoints: POST /send-otp, POST /verify-otp
+    - OTP is 6 digits, validated before any on-chain write is permitted
+
+4.3 Frontend Layer
+
+  Framework:    React 18 + TypeScript + Vite
+  Styling:      TailwindCSS with custom design tokens (primary, primary-support, on-surface-variant)
+  Web3:         wagmi v2 + viem — wallet connection and contract reads/writes
+  Ethers:       ethers.js — address checksumming, unit formatting (formatUnits)
+  State:        Zustand — global stores for contract address, will status, beneficiaries, signers,
+                          token balance, wallet state, token approval
+  Routing:      React Router v6
+
+  Global Stores:
+    - contractStore     → Active child will contract address
+    - willStatusStore   → Triggered, locked, finalPool, timing fields, loading state
+    - beneficiaryStore  → Beneficiary records (id, wallet, percent, claimed, email, name, role)
+    - signerStore       → Signer records (id, wallet, name, email, signed, signedAt)
+    - balanceStore      → Owner CWT token balance
+    - tokenStore        → Token contract address
+    - tokenApprovalStore→ Approved amount for the will
+    - walletStore       → Connected address, connection state
+    - userStore         → User profile data
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. USER FLOWS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5.1 Create a Will (Owner Flow)
+  Step 1 — Connect wallet (wagmi CustomConnectButton)
+  Step 2 — Navigate to Create New Will page
+  Step 3 — Fill will details:
+              - Owner name and email
+              - Inactivity period (time before will can be triggered)
+              - Grace period (cooldown after trigger before claims open)
+              - List of beneficiaries (name, email, wallet, allocation %)
+              - List of signers/guardians (name, email, wallet)
+              - Token approval amount (how much CWT to allocate)
+  Step 4 — Submit: factory contract deploys a new child will contract
+  Step 5 — System resolves deployed contract address via getWillsByOwner(ownerAddress)
+  Step 6 — Contract address stored in global state (contractStore)
+  Step 7 — Owner notification email sent with contract address and confirmation
+
+5.2 Admin Trigger Flow
+  Step 1 — Admin navigates to /admin?contract=0x...
+  Step 2 — Admin connects wallet (must match hardcoded ADMIN_WALLET)
+  Step 3 — Dashboard loads: will lifecycle status, timing data, signer list
+  Step 4 — Admin clicks "Trigger by Time" once the unlock window opens
+  Step 5 — triggerByTime() transaction submitted and confirmed
+  Step 6 — Notification emails sent to all registered signers with their sign links
+  Step 7 — Admin dashboard reflects updated status; disconnect button shown
+
+5.3 Signer Attestation Flow (SignInheritance page)
+  Step 1 — Signer opens their unique sign link (URL includes email + contract params)
+  Step 2 — Page loads signer record from contract, validates email match
+  Step 3 — Signer connects their registered wallet
+  Step 4 — Wallet mismatch check: warns if wrong wallet connected
+  Step 5 — OTP verification: signer requests OTP to their email (audience: "signer")
+  Step 6 — Signer enters 6-digit OTP; backend verifies it
+  Step 7 — Attest button unlocks; signer submits sign() transaction on-chain
+  Step 8 — System checks attestation count:
+              - If threshold NOT yet met: disconnect button shown, signer can leave
+              - If threshold MET: beneficiary notification emails sent to all
+                beneficiaries with their individual claim links
+  Step 9 — Signer session complete; wallet disconnect recommended
+
+5.4 Beneficiary Claim Flow (ClaimInheritance page)
+  Step 1 — Beneficiary opens their unique claim link (URL includes email + contract params)
+  Step 2 — Page loads beneficiary record from contract, validates email match
+  Step 3 — If already claimed: claimed banner shown immediately, skip to step 9
+  Step 4 — Step indicator: Connect → Verify → Claim
+  Step 5 — [Connect step] Beneficiary connects registered wallet
+              - Wrong wallet: warning shown, user prompted to switch
+  Step 6 — [Verify step] Email OTP sent (audience: "beneficiary")
+              - Beneficiary enters OTP; backend verifies
+              - Error shown on invalid/expired OTP
+  Step 7 — [Claim step] Claim button shows with formatted CWT amount
+              - Will must be triggered for claim to succeed
+              - Gas estimation runs before tx submission
+  Step 8 — claim(beneficiaryId) transaction submitted and confirmed
+  Step 9 — Claimed banner shown; disconnect wallet button presented
+  Optional — Beneficiary can optionally change their registered wallet via the
+             "Change Registered Wallet" accordion (2-step: request + confirm on-chain)
+
+5.5 Dashboard (Owner Monitoring)
+  - DashboardLayout resolves active will contract on mount via getWillsByOwner
+  - All child pages share the resolved contract state via Zustand
+  - Overview page: will lifecycle status, key metrics, beneficiary allocation table
+  - Beneficiaries page: manage beneficiary allocations live from chain
+  - Signers page: view guardian status, multisig threshold progress, replace signers
+  - Assets page: token balance and approval management
+  - Settings page: will configuration updates
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. FEATURE REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6.1 Core (Must-Have)
+
+  [F-01] Will Creation
+    - Owner can deploy a unique will contract via the factory
+    - Will parameters: name, email, inactivity period, grace period,
+      beneficiary list (name/email/wallet/percent), signer list (name/email/wallet)
+    - Sum of allocation percentages must equal 100%
+    - Token approval amount set at creation time
+
+  [F-02] Non-Custodial Token Model
+    - No deposits: owner retains full custody of CWT until execution
+    - Owner approves a spend allowance; child contract reads finalPool at execution
+    - finalPool is calculated from the approved balance at trigger time
+
+  [F-03] Admin Trigger
+    - Only the admin wallet can call triggerByTime()
+    - Trigger is time-locked: can only be called after inactivityPeriod elapses
+    - After trigger: will is "locked" and attestation window opens
+
+  [F-04] Multisig Signer Attestation
+    - Configurable N signers; default threshold is 2-of-N (or 1-of-1 for single signer)
+    - Each signer must pass OTP verification before signing
+    - Attestation count tracked on-chain via getAttestationStatus()
+    - Threshold completion triggers beneficiary notification emails
+
+  [F-05] Email OTP Identity Verification
+    - Signers: OTP required before attestation (audience: "signer")
+    - Beneficiaries: OTP required before claiming (audience: "beneficiary")
+    - 6-digit numeric codes, time-limited
+    - Resend capability with rate-limited UI
+
+  [F-06] Beneficiary Claim
+    - Wallet must match registered beneficiary address on-chain
+    - OTP must be verified before claim button activates
+    - Will must be in triggered state
+    - Double-claim prevented: claimed flag stored on-chain per beneficiary
+    - Claim amount: (finalPool × percent) / 10,000 (basis points)
+
+  [F-07] Email Notification Lifecycle
+    - Owner email: after successful will deployment
+    - Signer email: after admin triggers the will
+    - Beneficiary email: after signer threshold is met
+    - Each email contains the relevant contract address and action link
+
+  [F-08] Wallet Change for Beneficiaries
+    - Beneficiary can update their registered wallet (two on-chain transactions)
+    - Step 1: requestWalletChange(newAddress) — initiates the request
+    - Step 2: confirmWalletChange() — commits it on-chain
+    - Old wallet can complete step 2 from a different device if needed
+
+  [F-09] Guardian Replacement (Signer Replace)
+    - Owner can replace any signer on-chain via replaceSigner()
+    - New signer details (name, email, wallet) updated in contract storage
+    - Dashboard Signers page reflects changes in real-time
+
+  [F-10] Wallet Disconnect Guidance
+    - Admin: disconnect shown after triggerByTime() succeeds
+    - Signer: disconnect shown after attestation is submitted
+    - Beneficiary: disconnect shown after successful claim
+    - Prevents accidental re-use or session confusion
+
+6.2 Supporting Features
+
+  [F-11] Dashboard Auto-Resolution
+    - DashboardLayout resolves the active child contract from factory on wallet connect
+    - All dashboard pages benefit without individual setup
+
+  [F-12] Real-Time Will Status
+    - useWillStatus() hook in DashboardLayout refreshes will state on mount and reconnect
+    - triggered, locked, finalPool, countdown timers all live-synced
+
+  [F-13] Add CWT Token to Wallet
+    - One-click "Add CWT to Wallet" via wallet_watchAsset EIP-747 request
+    - Available on beneficiary claim page after successful claim
+
+  [F-14] Consistent Loading States
+    - InlineLoader (spinner, non-overlay) used across all dashboard and general pages
+    - No layout shift: loaders render inline within their container
+
+  [F-15] Beneficiary Allocation Table (Dashboard)
+    - Live on-chain data, no static mocks
+    - Columns: Name + Role, Wallet (truncated), Allocation %, Status (Active/Claimed)
+    - Empty state with guidance icon
+    - "Manage" link to /auth/beneficiaries
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. NON-FUNCTIONAL REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Security:
+  - All on-chain writes require gas estimation before submission (prevent failed txs)
+  - OTP gates are enforced client-side AND backend-side
+  - Admin wallet is hardcoded in contract; no runtime configurability
+  - Wallet address matching is case-insensitive (toLowerCase comparison)
+  - EIP-55 address checksumming via ethers.getAddress() before all contract calls
+
+Performance:
+  - Contract reads are parallelized via Promise.allSettled() where independent
+  - Global Zustand state prevents redundant reads across dashboard pages
+  - Loader states shown immediately; UI never blocks without feedback
+
+Reliability:
+  - All contract calls wrapped in try/catch with toast error messages
+  - Toast loading messages updated to success/error; never left dangling
+  - Failed gas estimation short-circuits before write submission
+  - Settled-or-rejected pattern: one failed read doesn't block others
+
+Accessibility & UX:
+  - 3-step visual progress indicator (Connect → Verify → Claim)
+  - Wallet mismatch: explicit warning with the exact required address shown
+  - Wrong-network and missing-contract guards before any page renders
+  - All buttons disabled with correct visual state during async operations
+  - Mobile-responsive layout throughout
+
+Type Safety:
+  - Strict TypeScript throughout frontend (zero tsc errors enforced)
+  - All contract return types explicitly typed (RawBeneficiary, RawWillStatus, etc.)
+  - No use of `any` in core paths; unknown[] for generic contract args
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. PAGE MAP & ROUTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Public Routes (no wallet required):
+  /                         → Home (landing page, hero + how it works preview)
+  /about                    → About ChainWill protocol
+  /how-it-works             → Step-by-step guide for all user types
+  /privacy-policy           → Privacy Policy
+  /terms-and-condition      → Terms and Conditions
+
+General Routes (wallet may be required):
+  /create                   → CreateNewWill — deploy a will contract
+  /admin                    → Admin panel (admin wallet required, ?contract=0x...)
+  /sign/:email              → SignInheritance — signer attestation flow
+  /claim/:email             → ClaimInheritance — beneficiary claim flow
+                              (also accepts ?contract=0x... or ?will=0x...)
+
+Protected Dashboard Routes (wallet + will contract required):
+  /auth/overview            → Dashboard Overview — will status, allocation summary
+  /auth/beneficiaries       → Beneficiary management
+  /auth/signers             → Signer / guardian management
+  /auth/assets              → Token balance and approval management
+  /auth/settings            → Will configuration settings
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. DATA MODEL (ON-CHAIN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Beneficiary Record:
+  id          bigint    — unique ID within the will
+  wallet      string    — registered EVM wallet address
+  percent     bigint    — allocation in basis points (10,000 = 100%)
+  claimed     boolean   — true once claim() has been called
+  claimedAt   bigint    — unix timestamp of the claim
+  name        string    — display name
+  email       string    — contact email (used for OTP and notifications)
+  role        string    — descriptive role (e.g. "Spouse", "Child", "Charity")
+
+Signer Record:
+  id          bigint    — unique ID within the will
+  wallet      string    — registered EVM wallet address
+  signed      boolean   — true once sign() has been called
+  signedAt    bigint    — unix timestamp of attestation
+  name        string    — display name
+  email       string    — contact email (used for OTP and notifications)
+
+Will Status:
+  triggered          boolean — has the will been initiated by admin
+  locked             boolean — is the will locked pending attestation
+  finalPool          bigint  — total CWT available for distribution (18 decimals)
+  inactivityPeriod   bigint  — seconds of inactivity before trigger is allowed
+  gracePeriod        bigint  — seconds after trigger before signing window opens
+  triggerUnlocksAt   bigint  — unix timestamp when admin can call triggerByTime
+  attestationOpensAt bigint  — unix timestamp when signers can begin signing
+  lastCheckIn        bigint  — unix timestamp of owner's most recent on-chain activity
+  approvedAmount     bigint  — CWT approved by owner for the will
+  ownerWalletBalance bigint  — owner's current CWT balance
+  effectivePullAmount bigint — the lesser of approved and balance (actual finalPool)
+  timeRemaining      bigint  — seconds until trigger unlocks
+
+Owner Profile:
+  name    string  — will owner's name
+  email   string  — will owner's contact email
+  wallet  string  — owner's EVM wallet address
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. TECH STACK SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Frontend:
+  React 18          UI framework
+  TypeScript        Static typing (strict mode)
+  Vite              Build tool and dev server
+  TailwindCSS       Utility-first styling
+  wagmi v2          Wallet connection, contract reads/writes
+  viem              Low-level EVM primitives
+  ethers.js         Address checksumming, unit formatting
+  Zustand           Lightweight global state management
+  React Router v6   Client-side routing
+  Axios             HTTP client for backend API calls
+  Lucide React      Icon system
+  react-hot-toast   Toast notification system
+
+Backend:
+  Node.js           Runtime
+  REST API          Email notification + OTP endpoints
+  Email provider    Transactional email delivery (e.g. SendGrid / Nodemailer)
+  OTP store         Temporary OTP record store (Redis / in-memory / DB)
+
+Blockchain:
+  Solidity          Smart contract language
+  EVM-compatible    Deployable on Ethereum, Polygon, BSC, or any EVM chain
+  Factory Pattern   One factory → many child will contracts
+  ERC-20            CWT token standard (18 decimals)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. KEY DIFFERENTIATORS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+vs. Traditional Wills:
+  + No lawyers, no courts, no probate — execution is automatic
+  + Immutable and transparent — allocations cannot be secretly changed
+  + Global: no jurisdiction-specific requirements
+
+vs. Centralized Crypto Inheritance Services:
+  + Non-custodial: assets never leave the owner's wallet pre-execution
+  + No single point of failure: no company can freeze or lose your assets
+  + Transparent: all rules are publicly verifiable smart contract code
+
+vs. Raw Smart Contracts (DIY):
+  + Consumer-grade UX: no blockchain knowledge required
+  + Email-first identity: OTP verification bridges web2 and web3 identity
+  + Multi-stakeholder flow: purpose-built interfaces for owners, signers, and beneficiaries
+  + Off-chain notifications: email alerts keep non-technical participants informed
+
+Security Model Highlights:
+  + Admin cannot execute alone — signer threshold is a mandatory check
+  + Signers cannot claim — roles are strictly separated by contract logic
+  + Beneficiaries cannot sign — each participant's actions are scoped by role
+  + OTP + wallet check = two-factor identity for all sensitive actions
+  + Time-lock on trigger prevents premature execution
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. SUCCESS METRICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Adoption:
+  - Number of wills deployed (child contracts created via factory)
+  - Total CWT approved across all will contracts
+  - Number of unique owner wallet addresses
+
+Engagement:
+  - Will-to-trigger rate (deployed wills that eventually execute)
+  - Signer attestation completion rate
+  - Beneficiary claim rate after will execution
+
+Reliability:
+  - Zero failed claims due to gas estimation errors
+  - Email delivery rate for all three notification types
+  - OTP success rate (send + verify within session)
+
+User Experience:
+  - Time from will creation to first beneficiary claim (E2E)
+  - Drop-off rate at each step of the 3-step claim flow
+  - Wallet mismatch rate (beneficiaries connecting wrong wallet)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+13. SLIDE STRUCTURE SUGGESTION (for Presentation)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Slide 1 — Title
+  "ChainWill: Securing Your Digital Legacy On-Chain"
+  Tagline: Trustless. Non-custodial. Automated inheritance.
+
+Slide 2 — The Problem
+  $140B+ in inaccessible crypto | No built-in inheritance for wallets |
+  Traditional wills don't work for crypto assets
+
+Slide 3 — The Solution
+  What ChainWill is in one sentence + the three-word pitch:
+  Trustless. Non-custodial. Automated.
+
+Slide 4 — How It Works (5 steps)
+  Create → Approve → Trigger → Attest → Claim
+  Visual flowchart with 4 stakeholders and their roles
+
+Slide 5 — Architecture Overview
+  Factory Contract → Child Will Contract → CWT Token |
+  Frontend (React + wagmi) → Backend (Email/OTP) → On-Chain
+
+Slide 6 — User Roles & Flows
+  Owner | Admin | Signers | Beneficiaries — one row per role with key action
+
+Slide 7 — Security Model
+  Non-custodial | Multisig threshold | OTP + wallet verification | Time-locks |
+  Role isolation (admin ≠ signer ≠ beneficiary)
+
+Slide 8 — Key Features
+  Highlight 6 features with icons:
+  - Non-custodial approval model
+  - Email OTP 2FA
+  - Multisig guardian attestation
+  - Live on-chain dashboard
+  - Beneficiary wallet change flow
+  - Automated email notifications
+
+Slide 9 — Tech Stack
+  Smart contracts (Solidity/EVM) | React + TypeScript | wagmi + ethers.js |
+  Zustand | TailwindCSS | Email notification service
+
+Slide 10 — Differentiators
+  3-column comparison: Traditional Wills vs. Centralized Crypto vs. ChainWill
+
+Slide 11 — Demo / Screenshots
+  Landing page → Create Will → Dashboard → Sign page → Claim page
+
+Slide 12 — Roadmap / Next Steps
+  (Customize based on what's planned: mobile, multi-chain, audit, DAO governance, etc.)
+
+Slide 13 — Call to Action
+  "Draft your first will at chainwill.xyz"
+  GitHub / documentation / contact links
+
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
