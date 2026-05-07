@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, UserPlus, ShieldCheck, FileText, Edit2, Trash2 } from "lucide-react";
+import { InlineLoader } from "@/components/Loader";
 import AddBeneficiary from "@/modals/AddBeneficiary";
 import UpdateBeneficiary from "@/modals/UpdateBeneficiary";
 import { useReadBeneficiary } from "@/hooks/child/useReadBeneficiary";
@@ -151,6 +152,9 @@ const Beneficiaries = () => {
         </div>
 
         <div className="overflow-x-auto px-6 py-6">
+          {isLoading && (
+            <InlineLoader isLoading variant="spinner" size="sm" text="Loading beneficiaries…" />
+          )}
           <table className="min-w-full text-left text-sm text-slate-700">
             <thead>
               <tr className="border-b border-slate-200 text-slate-500">

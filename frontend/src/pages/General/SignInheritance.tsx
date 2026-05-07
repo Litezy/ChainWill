@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { getAddress } from "ethers";
-import { useAccount } from "wagmi";
-import { ShieldCheck, AlertTriangle, Loader2, UserCircle2 } from "lucide-react";
+import { useAccount, useDisconnect } from "wagmi";
+import { ShieldCheck, AlertTriangle, Loader2, UserCircle2, KeyRound, LogOut } from "lucide-react";
+import { InlineLoader } from "@/components/Loader";
 import CustomConnectButton from "@/components/CustomConnectButton";
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
 import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
 import {
   dismissToast,
+  errorMessage,
   loadingMessage,
   successMessage,
 } from "@/utils/messageStatus";
+import {
+  sendOtp as sendOtpService,
+  verifyOtp as verifyOtpService,
+  sendNotificationEmail,
+} from "@/services/emailNotice.service";
 
 const decodeContractAddress = (value: string | null): `0x${string}` | null => {
   if (!value) return null;
@@ -30,6 +37,17 @@ type RawSigner = {
   signedAt: bigint;
   name: string;
   email: string;
+};
+
+type RawBeneficiary = {
+  id: bigint;
+  wallet: string;
+  percent: bigint;
+  claimed: boolean;
+  claimedAt: bigint;
+  name: string;
+  email: string;
+  role: string;
 };
 
 type OwnerProfile = {
@@ -76,6 +94,7 @@ const SignInheritance = () => {
   const { callWriteFunction } = useCallWriteMethods("child", resolvedChildAddress);
   const { estimateGas } = useGasEstimator("child", resolvedChildAddress);
 
+  const { disconnect } = useDisconnect();
   const [signer, setSigner] = useState<RawSigner | null>(null);
   const [ownerProfile, setOwnerProfile] = useState<OwnerProfile | null>(null);
   const [attestation, setAttestation] = useState<AttestationStatus | null>(null);
@@ -83,6 +102,39 @@ const SignInheritance = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmittedInSession, setHasSubmittedInSession] = useState(false);
+
+  // OTP state
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+  const handleSendOtp = async () => {
+    setIsSendingOtp(true);
+    setOtpError(null);
+    const result = await sendOtpService({ email: signerEmail, audience: "signer" });
+    setIsSendingOtp(false);
+    if (result !== undefined) {
+      setOtpSent(true);
+      successMessage("OTP sent to your email.");
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length < 6) return;
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    const result = await verifyOtpService({ email: signerEmail, otp });
+    setIsVerifyingOtp(false);
+    if (result !== undefined) {
+      setOtpVerified(true);
+      successMessage("Identity verified.");
+    } else {
+      setOtpError("Invalid or expired OTP. Please try again.");
+    }
+  };
 
   const fetchPageData = useCallback(async () => {
     if (!signerEmail) {
@@ -135,7 +187,8 @@ const SignInheritance = () => {
     !!attestation?.available &&
     walletMatchesSigner &&
     !willStatus?.triggered &&
-    !hasSubmittedInSession;
+    !hasSubmittedInSession &&
+    otpVerified;
 
   const handleAttest = async () => {
     const toastId = loadingMessage("Estimating gas...");
@@ -150,8 +203,29 @@ const SignInheritance = () => {
       if (!success) return;
 
       setHasSubmittedInSession(true);
-      successMessage("Attestation submitted successfully");
+      successMessage("Attestation submitted successfully.");
       await fetchPageData();
+
+      // Check if the will is now triggered (threshold met) and notify beneficiaries
+      const updatedStatus = await callReadFunction<{ triggered: boolean }>("getWillStatus", []);
+      if (updatedStatus?.triggered) {
+        const beneficiariesResult = await callReadFunction<RawBeneficiary[]>("getBeneficiaries", []);
+        if (beneficiariesResult && beneficiariesResult.length > 0 && ownerProfile) {
+          await sendNotificationEmail({
+            type: "beneficiary",
+            ownerName: ownerProfile.name,
+            contractAddress: childAddress as string,
+            beneficiaries: beneficiariesResult.map((b) => ({
+              beneficiaryName: b.name,
+              beneficiaryEmail: b.email,
+              allocationPercentage: Number(b.percent) / 100,
+            })),
+          });
+          successMessage("Beneficiaries have been notified via email.");
+        }
+      }
+    } catch (err) {
+      errorMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       dismissToast(toastId);
       setIsSubmitting(false);
@@ -231,9 +305,8 @@ const SignInheritance = () => {
             <div className="flex-1">
               <p className="text-sm font-semibold text-slate-950">Attestation Status</p>
               {isLoading ? (
-                <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading signer details...
+                <div className="mt-4">
+                  <InlineLoader isLoading variant="spinner" size="sm" text="Loading signer details…" />
                 </div>
               ) : (
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
@@ -269,6 +342,80 @@ const SignInheritance = () => {
                 </div>
               ) : null}
 
+              {/* OTP verification — shown when wallet matches and OTP not yet verified */}
+              {isConnected && walletMatchesSigner && !otpVerified && !willStatus?.triggered && (
+                <div className="mt-6 rounded-[20px] border border-slate-200 bg-slate-50 p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      <KeyRound className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">Verify your identity</p>
+                      <p className="text-xs text-slate-500">
+                        A one-time code will be sent to{" "}
+                        <span className="font-medium text-slate-700">{signerEmail}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {!otpSent ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleSendOtp()}
+                      disabled={isSendingOtp}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSendingOtp ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Sending OTP...</>
+                      ) : (
+                        "Send OTP to Email"
+                      )}
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-600">Enter OTP</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={otp}
+                          onChange={(e) => {
+                            setOtp(e.target.value.replace(/\D/g, ""));
+                            setOtpError(null);
+                          }}
+                          placeholder="6-digit code"
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-center font-mono text-lg tracking-widest text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+                        />
+                        {otpError && <p className="text-xs text-rose-600">{otpError}</p>}
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleSendOtp()}
+                          disabled={isSendingOtp}
+                          className="rounded-full border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
+                        >
+                          {isSendingOtp ? "Resending..." : "Resend"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleVerifyOtp()}
+                          disabled={isVerifyingOtp || otp.length < 6}
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isVerifyingOtp ? (
+                            <><Loader2 className="h-4 w-4 animate-spin" /> Verifying...</>
+                          ) : (
+                            "Verify & Continue"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {isConnected && willStatus?.triggered ? (
                 <div className="mt-6 rounded-3xl bg-emerald-50 p-4 text-sm text-emerald-700">
                   Signer threshold has already been met. Beneficiary claim is now open.
@@ -276,8 +423,18 @@ const SignInheritance = () => {
               ) : null}
 
               {hasSubmittedInSession && !willStatus?.triggered ? (
-                <div className="mt-6 rounded-3xl bg-primary/5 p-4 text-sm text-slate-600">
-                  Your attestation was submitted in this session. Waiting for the remaining signer threshold to execute the will.
+                <div className="mt-6 space-y-3">
+                  <div className="rounded-3xl bg-primary/5 p-4 text-sm text-slate-600">
+                    Your attestation was submitted in this session. Waiting for the remaining signer threshold to execute the will.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => disconnect()}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Disconnect Wallet
+                  </button>
                 </div>
               ) : null}
 
