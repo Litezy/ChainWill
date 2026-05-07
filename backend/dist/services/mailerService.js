@@ -243,7 +243,7 @@ class MailerService {
     supportEmail = process.env.MAIL_SUPPORT_EMAIL ||
         this.replyTo ||
         'support@chainwill.local';
-    frontendBaseUrl = process.env.APP_FRONTEND_URL || 'http://localhost:5173';
+    frontendBaseUrl = process.env.APP_FRONTEND_URL || 'https://chain-will.vercel.app';
     transporter;
     previewTransport;
     constructor() {
@@ -295,7 +295,7 @@ class MailerService {
         return this.renderTemplate(ownerWillCreatedTemplate, {
             ownerName: input.ownerName,
             contractAddress: input.contractAddress,
-            dashboardUrl: input.dashboardUrl,
+            dashboardUrl: input.dashboardUrl || this.buildAdminDashboardUrl(input.contractAddress),
             explorerUrl: input.explorerUrl,
         }, input.supportEmail);
     }
@@ -311,7 +311,8 @@ class MailerService {
             signerName: input.signerName,
             ownerName: input.ownerName,
             contractAddress: input.contractAddress,
-            signingPageUrl: input.signingPageUrl || this.buildSigningPageUrl(input.signerEmail),
+            signingPageUrl: input.signingPageUrl ||
+                this.buildSigningPageUrl(input.signerEmail, input.contractAddress),
             attestationWindowLabel: input.attestationWindowLabel,
         }, input.supportEmail);
     }
@@ -328,7 +329,8 @@ class MailerService {
             ownerName: input.ownerName,
             allocationPercentageLabel: normalizePercentage(input.allocationPercentage),
             contractAddress: input.contractAddress,
-            claimPageUrl: input.claimPageUrl || this.buildClaimPageUrl(input.beneficiaryEmail),
+            claimPageUrl: input.claimPageUrl ||
+                this.buildClaimPageUrl(input.beneficiaryEmail, input.contractAddress),
         }, input.supportEmail);
     }
     async sendBeneficiaryClaimEmail(input) {
@@ -345,7 +347,8 @@ class MailerService {
             otpCode: input.otpCode,
             expiresInMinutes: input.expiresInMinutes,
             contractAddress: input.contractAddress,
-            verificationPageUrl: input.verificationPageUrl,
+            verificationPageUrl: input.verificationPageUrl ||
+                this.buildVerificationPageUrl(input.recipientEmail, input.audience, input.contractAddress),
             purpose: input.purpose,
         }, input.supportEmail);
     }
@@ -373,13 +376,30 @@ class MailerService {
             text: baseTextTemplate(layoutContext),
         };
     }
-    buildSigningPageUrl(email) {
-        const url = new URL('/sign-inheritance', this.frontendBaseUrl);
-        url.searchParams.set('email', email);
+    buildSigningPageUrl(email, contractAddress) {
+        const url = new URL(`/sign-inheritance/${encodeURIComponent(email)}`, this.frontendBaseUrl);
+        url.searchParams.set('contract', contractAddress);
         return url.toString();
     }
-    buildClaimPageUrl(email) {
-        return new URL(`/claim-inheritance/${encodeURIComponent(email)}`, this.frontendBaseUrl).toString();
+    buildClaimPageUrl(email, contractAddress) {
+        const url = new URL(`/claim-inheritance/${encodeURIComponent(email)}`, this.frontendBaseUrl);
+        url.searchParams.set('contract', contractAddress);
+        return url.toString();
+    }
+    buildAdminDashboardUrl(contractAddress) {
+        const url = new URL('/admin', this.frontendBaseUrl);
+        url.searchParams.set('contract', contractAddress);
+        return url.toString();
+    }
+    buildVerificationPageUrl(email, audience, contractAddress) {
+        if (audience === 'signer') {
+            return contractAddress
+                ? this.buildSigningPageUrl(email, contractAddress)
+                : new URL(`/sign-inheritance/${encodeURIComponent(email)}`, this.frontendBaseUrl).toString();
+        }
+        return contractAddress
+            ? this.buildClaimPageUrl(email, contractAddress)
+            : new URL(`/claim-inheritance/${encodeURIComponent(email)}`, this.frontendBaseUrl).toString();
     }
 }
 exports.MailerService = MailerService;

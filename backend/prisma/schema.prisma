@@ -95,3 +95,14 @@ model Erc20Approval {
 
   will           Will     @relation(fields: [willId], references: [id])
 }
+
+model OtpVerification {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  audience  String
+  otpHash   String
+  otpSalt   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
