@@ -35,3 +35,6 @@ export type NotificationJobData =
       recipients: string[];
       ownerAddress: string;
     };
+
+
+   
