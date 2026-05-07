@@ -2,16 +2,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { formatUnits, getAddress } from "ethers";
 import { useAccount } from "wagmi";
-import { AlertTriangle, Wallet, Coins, Loader2, CheckCircle2 } from "lucide-react";
-import CustomConnectButton from "@/components/CustomConnectButton";
+import { AlertTriangle, Coins, Loader2 } from "lucide-react";
+
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
 import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
-import {
-  dismissToast,
-  loadingMessage,
-  successMessage,
-} from "@/utils/messageStatus";
+import { dismissToast, loadingMessage, successMessage } from "@/utils/messageStatus";
+
+import BeneficiaryCard from "@/components/beneficiary/BeneficiaryCard";
+import WalletChangePanel from "@/components/beneficiary/WalletChangePanel";
+import ClaimPanel from "@/components/beneficiary/ClaimPanel";
+import type {
+  RawBeneficiary,
+  RawOwnerProfile,
+  RawWillStatus,
+  OwnerProfile,
+  WillStatus,
+} from "@/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const decodeContractAddress = (value: string | null): `0x${string}` | null => {
@@ -24,47 +31,6 @@ const decodeContractAddress = (value: string | null): `0x${string}` | null => {
 };
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-// ── types ─────────────────────────────────────────────────────────────────────
-type RawWillStatus = {
-  approvedAmount: bigint;
-  ownerWalletBalance: bigint;
-  effectivePullAmount: bigint;
-  timeRemaining: bigint;
-  attestationOpensAt: bigint;
-  triggerUnlocksAt: bigint;
-  triggered: boolean;
-  locked: boolean;
-  inactivityPeriod: bigint;
-  lastCheckIn: bigint;
-  gracePeriod: bigint;
-  finalPool: bigint;
-};
-
-type RawOwnerProfile = [string, string, string];
-
-type RawBeneficiary = {
-  id: bigint;
-  wallet: string;
-  percent: bigint;
-  claimed: boolean;
-  claimedAt: bigint;
-  name: string;
-  email: string;
-  role: string;
-};
-
-type OwnerProfile = {
-  name: string;
-  email: string;
-  wallet: string;
-};
-
-type WillStatus = {
-  triggered: boolean;
-  locked: boolean;
-  finalPool: bigint;
-};
 
 const MAX_PERCENT = 10_000n;
 
@@ -115,7 +81,7 @@ const ClaimInheritance = () => {
   const [isClaiming, setIsClaiming] = useState(false);
   const [beneficiaryError, setBeneficiaryError] = useState<string | null>(null);
 
-  // ── fetch all beneficiaries, filter by email client-side ─────────────
+  // ── fetch all data ────────────────────────────────────────────────────
   const fetchPageData = useCallback(async () => {
     if (!beneficiaryEmail || !resolvedChildAddress) return;
 
@@ -130,7 +96,7 @@ const ClaimInheritance = () => {
         callReadFunction<RawWillStatus>("getWillStatus", []),
       ]);
 
-    // ── beneficiary — filter client-side by normalized email ───────────
+    // beneficiary — filter client-side by normalized email
     if (
       allBeneficiariesResult.status === "fulfilled" &&
       allBeneficiariesResult.value
@@ -138,13 +104,12 @@ const ClaimInheritance = () => {
       const match = allBeneficiariesResult.value.find(
         (b) => normalizeEmail(b.email) === beneficiaryEmail
       );
-
       if (match) {
         setBeneficiary(match);
       } else {
         setBeneficiaryError(
           `No beneficiary record found for "${beneficiaryEmail}" on this contract. ` +
-          `Ensure you opened this page from the correct claim link sent to you.`
+            `Ensure you opened this page from the correct claim link sent to you.`
         );
       }
     } else {
@@ -153,25 +118,18 @@ const ClaimInheritance = () => {
       );
     }
 
-    // ── owner profile ──────────────────────────────────────────────────
     if (ownerResult.status === "fulfilled" && ownerResult.value) {
       const [name, email, wallet] = ownerResult.value;
       setOwnerProfile({ name, email, wallet });
     }
 
-    // ── token ──────────────────────────────────────────────────────────
     if (tokenResult.status === "fulfilled" && tokenResult.value) {
       setTokenAddress(tokenResult.value);
     }
 
-    // ── will status ────────────────────────────────────────────────────
     if (willStatusResult.status === "fulfilled" && willStatusResult.value) {
       const s = willStatusResult.value;
-      setWillStatus({
-        triggered: s.triggered,
-        locked: s.locked,
-        finalPool: s.finalPool,
-      });
+      setWillStatus({ triggered: s.triggered, locked: s.locked, finalPool: s.finalPool });
     }
 
     setIsLoading(false);
@@ -182,11 +140,6 @@ const ClaimInheritance = () => {
   }, [fetchPageData]);
 
   // ── derived ──────────────────────────────────────────────────────────
-  const walletMatchesBeneficiary =
-    !!address &&
-    !!beneficiary &&
-    address.toLowerCase() === beneficiary.wallet.toLowerCase();
-
   const claimAmount = useMemo(() => {
     if (!beneficiary || !willStatus) return 0n;
     return (willStatus.finalPool * beneficiary.percent) / MAX_PERCENT;
@@ -197,14 +150,7 @@ const ClaimInheritance = () => {
     [claimAmount]
   );
 
-  const canClaim =
-    !!beneficiary &&
-    !!willStatus?.triggered &&
-    isConnected &&
-    walletMatchesBeneficiary &&
-    !beneficiary.claimed;
-
-  // ── claim handler ────────────────────────────────────────────────────
+  // ── claim handler ─────────────────────────────────────────────────────
   const handleClaim = async () => {
     if (!beneficiary) return;
 
@@ -231,7 +177,7 @@ const ClaimInheritance = () => {
     }
   };
 
-  // ── add token to wallet ──────────────────────────────────────────────
+  // ── add token to wallet ───────────────────────────────────────────────
   const addTokenToWallet = async () => {
     if (!window.ethereum || !tokenAddress) return;
     try {
@@ -247,7 +193,7 @@ const ClaimInheritance = () => {
     }
   };
 
-  // ── URL guards ───────────────────────────────────────────────────────
+  // ── URL guards ────────────────────────────────────────────────────────
   if (!beneficiaryEmail) {
     return (
       <Guard
@@ -270,7 +216,7 @@ const ClaimInheritance = () => {
     <div className="min-h-screen bg-slate-50 px-4 py-12">
       <div className="mx-auto max-w-4xl space-y-6">
 
-        {/* ── header ─────────────────────────────────────────────────── */}
+        {/* header */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm">
           <div className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
@@ -288,7 +234,7 @@ const ClaimInheritance = () => {
           </div>
         </div>
 
-        {/* ── loading ─────────────────────────────────────────────────── */}
+        {/* loading */}
         {isLoading && (
           <div className="flex items-center justify-center rounded-[28px] border border-slate-200 bg-white p-10 shadow-sm">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -298,7 +244,7 @@ const ClaimInheritance = () => {
           </div>
         )}
 
-        {/* ── beneficiary not found ────────────────────────────────────── */}
+        {/* beneficiary not found */}
         {!isLoading && beneficiaryError && (
           <div className="rounded-[28px] border border-rose-200 bg-rose-50 p-6 shadow-sm">
             <div className="flex items-start gap-3">
@@ -307,209 +253,52 @@ const ClaimInheritance = () => {
                 <p className="text-sm font-semibold text-rose-700">
                   Beneficiary not found
                 </p>
-                <p className="mt-1 text-sm text-rose-600">
-                  {beneficiaryError}
-                </p>
+                <p className="mt-1 text-sm text-rose-600">{beneficiaryError}</p>
                 <div className="mt-3 space-y-1 text-xs text-rose-400">
-                  <p>Email: <span className="font-mono">{beneficiaryEmail}</span></p>
-                  <p className="break-all">Contract: <span className="font-mono">{childAddress}</span></p>
+                  <p>
+                    Email: <span className="font-mono">{beneficiaryEmail}</span>
+                  </p>
+                  <p className="break-all">
+                    Contract: <span className="font-mono">{childAddress}</span>
+                  </p>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── main content — only when beneficiary loaded ──────────────── */}
+        {/* main content — only when beneficiary loaded */}
         {!isLoading && beneficiary && (
           <>
-            {/* profiles */}
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-                <p className="text-xs font-semibold uppercase text-slate-400">
-                  Testator
-                </p>
-                <div className="mt-4 space-y-2 text-sm text-slate-600">
-                  <p>
-                    <span className="font-semibold text-slate-950">Name:</span>{" "}
-                    {ownerProfile?.name ?? "—"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-950">Email:</span>{" "}
-                    {ownerProfile?.email ?? "—"}
-                  </p>
-                  <p className="break-all">
-                    <span className="font-semibold text-slate-950">Wallet:</span>{" "}
-                    {ownerProfile?.wallet ?? "—"}
-                  </p>
-                </div>
-              </div>
+            {/* 1. Beneficiary info cards */}
+            <BeneficiaryCard
+              ownerProfile={ownerProfile}
+              beneficiary={beneficiary}
+              willStatus={willStatus}
+              tokenAddress={tokenAddress}
+              formattedClaimAmount={formattedClaimAmount}
+              onAddTokenToWallet={() => void addTokenToWallet()}
+            />
 
-              <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-                <p className="text-xs font-semibold uppercase text-slate-400">
-                  Your Beneficiary Record
-                </p>
-                <div className="mt-4 space-y-2 text-sm text-slate-600">
-                  <p>
-                    <span className="font-semibold text-slate-950">Name:</span>{" "}
-                    {beneficiary.name}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-950">Role:</span>{" "}
-                    {beneficiary.role}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-950">Allocation:</span>{" "}
-                    {Number(beneficiary.percent) / 100}%
-                  </p>
-                  <p className="break-all">
-                    <span className="font-semibold text-slate-950">Registered Wallet:</span>{" "}
-                    <span className="font-mono text-xs">{beneficiary.wallet}</span>
-                  </p>
-                </div>
-              </div>
-            </div>
+            {/* 2. Optional: change registered wallet */}
+            <WalletChangePanel
+              beneficiaryId={beneficiary.id}
+              currentWallet={beneficiary.wallet}
+              onWalletChanged={fetchPageData}
+              callWriteFunction={callWriteFunction}
+              // estimateGas={estimateGas}
+            />
 
-            {/* claim details */}
-            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-slate-400">
-                    Claim Details
-                  </p>
-                  <div className="mt-4 space-y-2 text-sm text-slate-600">
-                    <p>
-                      <span className="font-semibold text-slate-950">Will Executed:</span>{" "}
-                      <span className={willStatus?.triggered ? "text-emerald-600 font-semibold" : "text-amber-600"}>
-                        {willStatus?.triggered ? "Yes" : "Not yet"}
-                      </span>
-                    </p>
-                    <p>
-                      <span className="font-semibold text-slate-950">Claimed:</span>{" "}
-                      <span className={beneficiary.claimed ? "text-emerald-600 font-semibold" : "text-slate-500"}>
-                        {beneficiary.claimed ? "Yes" : "No"}
-                      </span>
-                    </p>
-                    <p>
-                      <span className="font-semibold text-slate-950">Your Share:</span>{" "}
-                      <span className="text-primary font-semibold">
-                        {formattedClaimAmount} CWT
-                      </span>
-                    </p>
-                    {beneficiary.claimedAt > 0n && (
-                      <p>
-                        <span className="font-semibold text-slate-950">Claimed At:</span>{" "}
-                        {new Date(Number(beneficiary.claimedAt) * 1000).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase text-slate-400">
-                    Token
-                  </p>
-                  <div className="mt-4 space-y-3 text-sm text-slate-600">
-                    <p className="break-all font-mono text-xs text-slate-500">
-                      {tokenAddress || "—"}
-                    </p>
-                    {tokenAddress && (
-                      <button
-                        type="button"
-                        onClick={() => void addTokenToWallet()}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        <Wallet className="h-4 w-4" />
-                        Add CWT to Wallet
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── connect + claim ──────────────────────────────────────── */}
-            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-              {!isConnected ? (
-                <div className="text-center space-y-4">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                    <Wallet className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">
-                      Connect your wallet to claim
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      You must connect{" "}
-                      <span className="font-mono">
-                        {beneficiary.wallet.slice(0, 6)}...{beneficiary.wallet.slice(-4)}
-                      </span>{" "}
-                      — the wallet registered on-chain for this beneficiary.
-                    </p>
-                  </div>
-                  <CustomConnectButton
-                    title="Connect Wallet"
-                    className="w-full py-3"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* connected wallet info */}
-                  <div className="flex items-center gap-3 rounded-3xl bg-slate-50 p-4">
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${walletMatchesBeneficiary ? "bg-emerald-100" : "bg-amber-100"}`}>
-                      {walletMatchesBeneficiary
-                        ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        : <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      }
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-slate-400">Connected wallet</p>
-                      <p className="truncate font-mono text-xs text-slate-700">{address}</p>
-                    </div>
-                  </div>
-
-                  {/* wrong wallet warning */}
-                  {!walletMatchesBeneficiary && (
-                    <div className="rounded-3xl bg-amber-50 p-4 text-sm text-amber-700">
-                      Wrong wallet connected. This claim requires{" "}
-                      <span className="font-mono font-semibold">
-                        {beneficiary.wallet.slice(0, 6)}...{beneficiary.wallet.slice(-4)}
-                      </span>
-                      . Switch wallets and reconnect.
-                    </div>
-                  )}
-
-                  {/* will not triggered */}
-                  {!willStatus?.triggered && (
-                    <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
-                      The will has not been executed yet. Admin must trigger
-                      and signers must complete attestation before claims open.
-                    </div>
-                  )}
-
-                  {/* already claimed */}
-                  {beneficiary.claimed && (
-                    <div className="rounded-3xl bg-emerald-50 p-4 text-sm text-emerald-700 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      You have already claimed {formattedClaimAmount} CWT from this will.
-                    </div>
-                  )}
-
-                  {/* claim button */}
-                  <button
-                    type="button"
-                    onClick={() => void handleClaim()}
-                    disabled={!canClaim || isClaiming}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isClaiming
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Claiming...</>
-                      : beneficiary.claimed
-                      ? "Already Claimed"
-                      : `Claim ${formattedClaimAmount} CWT`}
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* 3. Connect → OTP → Claim flow */}
+            <ClaimPanel
+              beneficiary={beneficiary}
+              willStatus={willStatus}
+              address={address}
+              isConnected={isConnected}
+              isClaiming={isClaiming}
+              formattedClaimAmount={formattedClaimAmount}
+              onClaim={handleClaim}
+            />
           </>
         )}
 
