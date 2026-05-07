@@ -2,6 +2,7 @@ import { approvalListener } from './approvalListener';
 import { effectivePullAmountService } from './effectivePullAmount';
 import { factoryIndexer } from '../jobs/factory-indexer';
 import { willIndexer } from '../jobs/will-indexer';
+import { inactivityMonitorJob } from '../jobs/monitor';
 
 /**
  * Service to manage all Web3 event listeners and background jobs
