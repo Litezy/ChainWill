@@ -5,6 +5,7 @@ const approvalListener_1 = require("./approvalListener");
 const effectivePullAmount_1 = require("./effectivePullAmount");
 const factory_indexer_1 = require("../jobs/factory-indexer");
 const will_indexer_1 = require("../jobs/will-indexer");
+const monitor_1 = require("../jobs/monitor");
 /**
  * Service to manage all Web3 event listeners and background jobs
  */
