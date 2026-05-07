@@ -3,8 +3,4 @@ import { PrismaClient } from '@prisma/client';
 
 dotenv.config();
 
-const prismaUrl = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
-
-export const prisma = new PrismaClient(
-  prismaUrl ? { datasourceUrl: prismaUrl } : undefined
-);
+export const prisma = new PrismaClient();

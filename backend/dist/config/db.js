@@ -7,13 +7,5 @@ exports.prisma = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 const client_1 = require("@prisma/client");
 dotenv_1.default.config();
-const prismaUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
-exports.prisma = new client_1.PrismaClient(prismaUrl
-    ? {
-        datasources: {
-            db: {
-                url: prismaUrl,
-            },
-        },
-    }
-    : undefined);
+const prismaUrl = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+exports.prisma = new client_1.PrismaClient(prismaUrl ? { datasourceUrl: prismaUrl } : undefined);
