@@ -1,6 +1,7 @@
 
 import { useMemo, useState } from "react";
 import { ShieldCheck, UserCircle2 } from "lucide-react";
+import { InlineLoader } from "@/components/Loader";
 import ModifySigners from "@/modals/ModifySigners";
 import { useReadSigners } from "@/hooks/child/useReadSigners";
 import type { SignerRecord } from "@/stores/signerStore";
@@ -83,6 +84,8 @@ const Signers = () => {
           </div>
         </div>
       </div>
+
+      <InlineLoader isLoading={isLoading} variant="spinner" size="sm" text="Loading signers…" />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {signers.map((guardian) => (

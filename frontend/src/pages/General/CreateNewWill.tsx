@@ -10,6 +10,8 @@ import StepTwo from "@/components/will/StepTwo";
 import StepThree from "@/components/will/StepThree";
 import { useNavigate } from "react-router-dom";
 import Loader from "@/components/Loader";
+import { sendNotificationEmail } from "@/services/emailNotice.service";
+import { useContractStore } from "@/stores/contractStore";
 
 type Signer = {
   name: string;
@@ -30,6 +32,7 @@ const tokenOptions: TokenOption[] = [
 ];
 
 const CreateNewWill: React.FC<CreateNewWillProps> = ({ onClose }) => {
+  const {contractAddress,reset} = useContractStore();
   const walletBalance = useWillStatusStore((state) => state.ownerWalletBalance);
   const displayBalance = formatCompact(formatUnits(walletBalance, 18));
   const { createWill, isSubmitting } = useCreateWill();
@@ -165,6 +168,9 @@ const CreateNewWill: React.FC<CreateNewWillProps> = ({ onClose }) => {
         setValidationError("Invalid owner email format.");
         return;
       }
+      if(contractAddress !== null){
+        reset();
+      }
       setStep(2);
       return;
     }
@@ -194,6 +200,15 @@ const CreateNewWill: React.FC<CreateNewWillProps> = ({ onClose }) => {
           signers,
         });
         if (success) {
+          const deployedAddress = useContractStore.getState().contractAddress;
+          if (deployedAddress) {
+            await sendNotificationEmail({
+              type: "owner",
+              ownerName,
+              ownerEmail,
+              contractAddress: deployedAddress,
+            });
+          }
           navig("/auth/overview");
         }
       } catch (error) {

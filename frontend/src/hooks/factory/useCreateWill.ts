@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
+import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
 import { useContractStore } from "@/stores/contractStore";
 import {
@@ -37,6 +38,7 @@ type OwnerInfoInput = {
 
 export const useCreateWill = () => {
   const { callWriteFunction } = useCallWriteMethods("factory");
+  const { callReadFunction } = useCallReadMethods("factory");
   const { estimateGas } = useGasEstimator("factory");
   const { address: ownerAddress } = useAccount();
   const {factoryContractConfig} = useContractCaller()
@@ -98,28 +100,15 @@ export const useCreateWill = () => {
 
       if (!success || !receipt) return false;
 
-      // ── 4. extract deployed will address from receipt logs ──────────
-      let contractAddress: string | undefined;
+      // ── 4. resolve deployed will address from on-chain read ─────────
+      const wills = await callReadFunction<string[]>("getWillsByOwner", [ownerAddress]);
 
-      for (const log of receipt.logs ?? []) {
-        try {
-          if (log.topics && log.topics.length >= 3) {
-            contractAddress = "0x" + log.topics[2].slice(26);
-            break;
-          }
-          if (log.data && log.data !== "0x") {
-            contractAddress = "0x" + log.data.slice(26, 66);
-            break;
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      if (!contractAddress) {
-        errorMessage("Could not extract will address from transaction");
+      if (!wills || wills.length === 0) {
+        errorMessage("Could not resolve will address. Please refresh.");
         return false;
       }
+
+      const contractAddress = wills[wills.length - 1];
 
       // ── 5. feed address into global store ──────────────────────────
       setContractAddress(contractAddress);

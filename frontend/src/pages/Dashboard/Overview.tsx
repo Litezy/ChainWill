@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, ShieldCheck, Clock3 } from 'lucide-react';
+import { InlineLoader } from '@/components/Loader';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import AssetDistributionCard from '@/components/dashboard/AssetDistributionCard';
 import AllocationTable from '@/components/dashboard/AllocationTable';
 import MetricCard from '@/components/dashboard/MetricCard';
 import CheckinButton from '@/components/ui/CheckinButton';
-// import { useWillStatus } from '@/hooks/child/useWillStatus';
 import { useWillStatusStore } from '@/stores/willStatusStore';
 import { formatCwtAmount, getPrimaryTriggerCountdown } from '@/utils/willStatus';
 
 const Overview: React.FC = () => {
-  // useWillStatus();
   const [now, setNow] = useState(() => Date.now());
   const isLoading = useWillStatusStore((state) => state.isLoading);
   const effectivePullAmount = useWillStatusStore((state) => state.effectivePullAmount);
@@ -60,6 +59,8 @@ const Overview: React.FC = () => {
           <CheckinButton/>
         </div>
       </section>
+
+      <InlineLoader isLoading={isLoading} variant="spinner" size="sm" text="Syncing will status…" />
 
       <div className="grid gap-3 xl:grid-cols-[1fr_1fr_0.94fr]">
         <MetricCard

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getAddress } from "ethers";
-import { useAccount } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -11,6 +11,7 @@ import {
   Mail,
   CheckCircle2,
   AlertTriangle,
+  LogOut,
 } from "lucide-react";
 import { useWillStatus } from "@/hooks/child/useWillStatus";
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
@@ -25,6 +26,8 @@ import {
 } from "@/utils/messageStatus";
 import { formatCountdown, formatUnixDateTime } from "@/utils/willStatus";
 import CustomConnectButton from "@/components/CustomConnectButton";
+import { sendNotificationEmail } from "@/services/emailNotice.service";
+import { InlineLoader } from "@/components/Loader";
 
 const ADMIN_WALLET = "0x776033F935cBb708891b1353F596725f9FfE632b";
 
@@ -147,17 +150,21 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
   const attestationOpensAt = useWillStatusStore((s) => s.attestationOpensAt);
   const finalPool = useWillStatusStore((s) => s.finalPool);
 
+  const { disconnect } = useDisconnect();
   const [now, setNow] = useState(() => Date.now());
   const [isTriggering, setIsTriggering] = useState(false);
   const [attestation, setAttestation] = useState<AttestationStatus | null>(null);
   const [signerEmails, setSignerEmails] = useState<string[]>([]);
+  const [signers, setSigners] = useState<RawSigner[]>([]);
+  const [ownerName, setOwnerName] = useState("");
 
   const fetchPageData = useCallback(async () => {
     await refetch();
 
-    const [attestationResult, signersResult] = await Promise.all([
+    const [attestationResult, signersResult, ownerResult] = await Promise.all([
       callReadFunction<[boolean, bigint, bigint]>("getAttestationStatus", []),
       callReadFunction<RawSigner[]>("getSignersWithDetails", []),
+      callReadFunction<[string, string, string]>("getOwnerProfile", []),
     ]);
 
     if (attestationResult) {
@@ -166,11 +173,13 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
     }
 
     if (signersResult) {
-      setSignerEmails(
-        signersResult
-          .map((item) => item.email)
-          .filter((email): email is string => !!email)
-      );
+      const validSigners = signersResult.filter((s) => !!s.email);
+      setSigners(validSigners);
+      setSignerEmails(validSigners.map((s) => s.email));
+    }
+
+    if (ownerResult) {
+      setOwnerName(ownerResult[0]);
     }
   }, [callReadFunction, refetch]);
 
@@ -216,6 +225,21 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
 
       successMessage("Attestation opened. Signers can now attest.");
       await fetchPageData();
+
+      if (signers.length > 0) {
+        await sendNotificationEmail({
+          type: "signer",
+          ownerName,
+          contractAddress: childAddress,
+          signers: signers.map((s) => ({
+            signerName: s.name,
+            signerEmail: s.email,
+          })),
+        });
+        successMessage("Signers notified via email.");
+      }
+    } catch (err) {
+      errorMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       dismissToast(toastId);
       setIsTriggering(false);
@@ -280,18 +304,20 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
             </div>
           </div>
 
+          <InlineLoader isLoading={isLoading} variant="spinner" size="sm" text="Refreshing will data…" />
+
           <div className="mt-6 divide-y divide-slate-100">
             <InfoRow
               label="Grace period"
-              value={isLoading ? "Loading..." : gracePeriodCountdown}
+              value={isLoading ? "—" : gracePeriodCountdown}
             />
-            <InfoRow
+            {/* <InfoRow
               label="Attestation opens at"
-              value={isLoading ? "Loading..." : formatUnixDateTime(attestationOpensAt)}
-            />
+              value={isLoading ? "—" : formatUnixDateTime(attestationOpensAt)}
+            /> */}
             <InfoRow
               label="Execution unlocks at"
-              value={isLoading ? "Loading..." : formatUnixDateTime(triggerUnlocksAt)}
+              value={isLoading ? "—" : formatUnixDateTime(triggerUnlocksAt)}
             />
             <InfoRow
               label="Attestation count"
@@ -303,7 +329,7 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
             />
             <InfoRow
               label="Claim pool after signer execution"
-              value={isLoading ? "Loading..." : finalPool}
+              value={isLoading ? "—" : finalPool}
             />
           </div>
         </div>
@@ -369,6 +395,18 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
                   {isTriggering ? "Opening Attestation..." : "Trigger By Time"}
                 </button>
               ) : null}
+
+              {/* disconnect once attestation is open — admin's job is done */}
+              {attestation?.available && !canOpenAttestation && (
+                <button
+                  type="button"
+                  onClick={() => disconnect()}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Disconnect Wallet
+                </button>
+              )}
             </div>
           </div>
         </div>

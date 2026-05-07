@@ -1,8 +1,12 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Wallet, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Wallet, ShieldCheck, LogOut } from "lucide-react";
+import { useDisconnect } from "wagmi";
 import CustomConnectButton from "@/components/CustomConnectButton";
 import type { RawBeneficiary, WillStatus } from "@/types";
-import { dismissToast, loadingMessage, successMessage, errorMessage } from "@/utils/messageStatus";
+import {
+  sendOtp as sendOtpService,
+  verifyOtp as verifyOtpService,
+} from "@/services/emailNotice.service";
 
 interface ClaimPanelProps {
   beneficiary: RawBeneficiary;
@@ -29,19 +33,13 @@ const OtpStep = ({ beneficiaryEmail, onVerified }: OtpStepProps) => {
   const [otpSent, setOtpSent] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
-  // ── integrate your backend here ───────────────────────────────────
   const sendOtp = async () => {
     setIsSending(true);
     setOtpError(null);
-    try {
-      // TODO: replace with your API call, e.g.:
-      // await api.post("/auth/otp/send", { email: beneficiaryEmail });
-      await new Promise((r) => setTimeout(r, 800)); // placeholder
+    const result = await sendOtpService({ email: beneficiaryEmail, audience: "beneficiary" });
+    setIsSending(false);
+    if (result !== undefined) {
       setOtpSent(true);
-    } catch {
-      setOtpError("Failed to send OTP. Please try again.");
-    } finally {
-      setIsSending(false);
     }
   };
 
@@ -49,16 +47,12 @@ const OtpStep = ({ beneficiaryEmail, onVerified }: OtpStepProps) => {
     if (!otp.trim()) return;
     setIsVerifying(true);
     setOtpError(null);
-    try {
-      // TODO: replace with your API call, e.g.:
-      // const { verified } = await api.post("/auth/otp/verify", { email: beneficiaryEmail, otp });
-      // if (!verified) throw new Error("Invalid OTP");
-      await new Promise((r) => setTimeout(r, 800)); // placeholder — remove when wired
+    const result = await verifyOtpService({ email: beneficiaryEmail, otp });
+    setIsVerifying(false);
+    if (result !== undefined) {
       onVerified();
-    } catch {
+    } else {
       setOtpError("Invalid or expired OTP. Please try again.");
-    } finally {
-      setIsVerifying(false);
     }
   };
 
@@ -155,6 +149,7 @@ const ClaimPanel = ({
   formattedClaimAmount,
   onClaim,
 }: ClaimPanelProps) => {
+  const { disconnect } = useDisconnect();
   const [claimStep, setClaimStep] = useState<ClaimStep>("connect");
   const [otpVerified, setOtpVerified] = useState(false);
 
@@ -276,8 +271,8 @@ const ClaimPanel = ({
         </div>
       )}
 
-      {/* ── step: OTP — only show when wallet matches and otp not yet verified ── */}
-      {isConnected && walletMatchesBeneficiary && claimStep === "otp" && !otpVerified && (
+      {/* ── step: OTP — skip entirely if already claimed ────────────── */}
+      {isConnected && walletMatchesBeneficiary && claimStep === "otp" && !otpVerified && !beneficiary.claimed && (
         <OtpStep
           beneficiaryEmail={beneficiary.email}
           onVerified={handleOtpVerified}
@@ -285,23 +280,33 @@ const ClaimPanel = ({
       )}
 
       {/* ── will not triggered ───────────────────────────────────────── */}
-      {isConnected && !willStatus?.triggered && (
+      {isConnected && !willStatus?.triggered && !beneficiary.claimed && (
         <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
           The will has not been executed yet. Admin must trigger and signers must
           complete attestation before claims open.
         </div>
       )}
 
-      {/* ── already claimed ──────────────────────────────────────────── */}
+      {/* ── already claimed — show banner + disconnect ───────────────── */}
       {beneficiary.claimed && (
-        <div className="rounded-3xl bg-emerald-50 p-4 text-sm text-emerald-700 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          You have already claimed {formattedClaimAmount} CWT from this will.
+        <div className="space-y-3">
+          <div className="rounded-3xl bg-emerald-50 p-4 text-sm text-emerald-700 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            You have already claimed {formattedClaimAmount} CWT from this will.
+          </div>
+          <button
+            type="button"
+            onClick={() => disconnect()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            <LogOut className="h-4 w-4" />
+            Disconnect Wallet
+          </button>
         </div>
       )}
 
       {/* ── claim button — shown at claim step ──────────────────────── */}
-      {(claimStep === "claim" || beneficiary.claimed) && (
+      {claimStep === "claim" && !beneficiary.claimed && (
         <button
           type="button"
           onClick={() => void onClaim()}
@@ -310,8 +315,6 @@ const ClaimPanel = ({
         >
           {isClaiming ? (
             <><Loader2 className="h-4 w-4 animate-spin" /> Claiming...</>
-          ) : beneficiary.claimed ? (
-            "Already Claimed"
           ) : (
             `Claim ${formattedClaimAmount} CWT`
           )}

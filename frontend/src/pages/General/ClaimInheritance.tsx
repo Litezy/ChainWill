@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { formatUnits, getAddress } from "ethers";
 import { useAccount } from "wagmi";
-import { AlertTriangle, Coins, Loader2 } from "lucide-react";
+import { AlertTriangle, Coins } from "lucide-react";
+import Loader from "@/components/Loader";
 
 import { useCallReadMethods } from "@/hooks/contract/useCallReadMethods";
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
@@ -236,11 +237,15 @@ const ClaimInheritance = () => {
 
         {/* loading */}
         {isLoading && (
-          <div className="flex items-center justify-center rounded-[28px] border border-slate-200 bg-white p-10 shadow-sm">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <span className="ml-3 text-sm text-slate-500">
-              Loading your beneficiary record...
-            </span>
+          <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <Loader
+              isLoading
+              variant="spinner"
+              size="sm"
+              text="Loading your beneficiary record…"
+              fullScreen={false}
+              overlay={false}
+            />
           </div>
         )}
 
