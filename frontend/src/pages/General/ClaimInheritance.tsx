@@ -287,11 +287,10 @@ const ClaimInheritance = () => {
 
             {/* 2. Optional: change registered wallet */}
             <WalletChangePanel
-              beneficiaryId={beneficiary.id}
               currentWallet={beneficiary.wallet}
               onWalletChanged={fetchPageData}
               callWriteFunction={callWriteFunction}
-              // estimateGas={estimateGas}
+              estimateGas={estimateGas}
             />
 
             {/* 3. Connect → OTP → Claim flow */}

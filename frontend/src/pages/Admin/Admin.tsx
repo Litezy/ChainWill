@@ -147,7 +147,6 @@ const AdminDashboard = ({ childAddress }: { childAddress: `0x${string}` }) => {
   const triggered = useWillStatusStore((s) => s.triggered);
   const locked = useWillStatusStore((s) => s.locked);
   const triggerUnlocksAt = useWillStatusStore((s) => s.triggerUnlocksAt);
-  const attestationOpensAt = useWillStatusStore((s) => s.attestationOpensAt);
   const finalPool = useWillStatusStore((s) => s.finalPool);
 
   const { disconnect } = useDisconnect();
