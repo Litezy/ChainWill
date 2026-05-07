@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { mailerService } from './mailerService';
 import type { AlertEmailPayload, NotificationJobData } from '../types/notifications';
 
 dotenv.config();
@@ -50,10 +51,6 @@ function parseEmailOverrides(): Record<string, string> {
 }
 
 export class AlertDispatcherService {
-  private readonly resendApiKey = process.env.RESEND_API_KEY;
-  private readonly emailFrom =
-    process.env.ALERT_EMAIL_FROM || 'ChainWill <onboarding@resend.dev>';
-  private readonly emailReplyTo = process.env.ALERT_EMAIL_REPLY_TO;
   private readonly emailOverrides = parseEmailOverrides();
 
   resolveRecipientEmail(input: RecipientResolverInput): string | null {
@@ -141,40 +138,16 @@ export class AlertDispatcherService {
       return;
     }
 
-    if (!this.resendApiKey) {
-      console.log(
-        `[AlertDispatcher] ${payload.category} alert prepared for ${payload.to.join(', ')}`
-      );
-      console.log(payload.text);
-      return;
-    }
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
+    await mailerService.sendMail({
+      to: payload.to,
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
       headers: {
-        Authorization: `Bearer ${this.resendApiKey}`,
-        'Content-Type': 'application/json',
+        'X-ChainWill-Category': payload.category,
+        'X-ChainWill-Source': 'chainwill-monitor',
       },
-      body: JSON.stringify({
-        from: this.emailFrom,
-        to: payload.to,
-        subject: payload.subject,
-        text: payload.text,
-        html: payload.html,
-        reply_to: this.emailReplyTo,
-        tags: [
-          { name: 'category', value: payload.category },
-          { name: 'source', value: 'chainwill-monitor' },
-        ],
-      }),
     });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Resend request failed with ${response.status} ${response.statusText}: ${body}`
-      );
-    }
   }
 }
 
