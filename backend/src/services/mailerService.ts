@@ -541,8 +541,7 @@ export class MailerService {
   }
 
   private buildAdminDashboardUrl(contractAddress: string): string {
-    const url = new URL('/admin', this.frontendBaseUrl);
-    url.searchParams.set('contract', contractAddress);
+    const url = new URL('https://chain-will.vercel.app/', this.frontendBaseUrl);
     return url.toString();
   }
 

@@ -10,7 +10,8 @@
     "test:email": "ts-node-dev --transpile-only --exit-child src/scripts/sendEmailTest.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node dist/server.js",
-    "start:notifications": "node dist/workers/notification.worker.js"
+    "start:notifications": "node dist/workers/notification.worker.js",
+    "prisma:generate": "prisma generate"
   },
   "keywords": [],
   "author": "",
