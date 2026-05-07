@@ -25,7 +25,6 @@ import {
 } from "@/utils/messageStatus";
 import { formatCountdown, formatUnixDateTime } from "@/utils/willStatus";
 import CustomConnectButton from "@/components/CustomConnectButton";
-import { CHAINWILL_CONTRACT_ADDRESS } from "@/constants/contract";
 
 const ADMIN_WALLET = "0x776033F935cBb708891b1353F596725f9FfE632b";
 
