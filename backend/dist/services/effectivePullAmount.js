@@ -4,7 +4,6 @@ exports.effectivePullAmountService = exports.EffectivePullAmountService = void 0
 const web3_1 = require("../config/web3");
 const db_1 = require("../config/db");
 const abi_1 = require("../config/abi");
-const viem_1 = require("viem");
 // Minimal ABI for FundingModule to call getEffectivePullAmount
 // Using the complete ChainWill ABI interface
 /**

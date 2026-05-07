@@ -27,7 +27,6 @@ model Will {
   lastCheckIn           DateTime
   
   // Status
-  attestationOpen       Boolean   @default(false)
   isTriggered           Boolean   @default(false)
   isLocked              Boolean   @default(false)
   attestationOpen       Boolean   @default(false)

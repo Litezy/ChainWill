@@ -1,3 +1,5 @@
+import { alertDispatcher } from '../services/alertDispatcher';
+import { notificationQueue } from '../queues/notificationQueue';
 import { Request, Response } from 'express';
 import { effectivePullAmountService } from '../services/effectivePullAmount';
 import { prisma } from '../config/db';

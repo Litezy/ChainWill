@@ -39,9 +39,18 @@ expect for `triggerByTime()`. The inactivity relayer will not start without it.
 
 **Email delivery variables:**
 ```env
-RESEND_API_KEY=re_xxxxxxxxx
-ALERT_EMAIL_FROM=ChainWill <onboarding@resend.dev>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_smtp_username
+SMTP_PASS=your_smtp_password
+MAIL_FROM=ChainWill <no-reply@chainwill.app>
+MAIL_REPLY_TO=support@chainwill.app
+MAIL_SUPPORT_EMAIL=support@chainwill.app
+APP_FRONTEND_URL=http://localhost:5173
 ```
+
+If `SMTP_HOST` is omitted, the backend falls back to a local preview transport and logs the generated email instead of sending it.
 
 ### 3. Initialize Database
 

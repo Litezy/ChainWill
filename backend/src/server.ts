@@ -8,6 +8,8 @@ import beneficiaryRoutes from './routes/beneficiary.routes';
 import signerRoutes from './routes/signer.routes';
 import { web3EventService } from './services/web3EventService';
 import { prisma } from './config/db';
+import { notificationWorker } from './workers/notificationWorker';
+import { notificationQueue } from './queues/notificationQueue';
 
 dotenv.config();
 
