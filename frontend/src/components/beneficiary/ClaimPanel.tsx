@@ -164,10 +164,7 @@ const ClaimPanel = ({
     !beneficiary.claimed &&
     otpVerified;
 
-  // advance step when wallet connects
-  const handleWalletConnected = () => {
-    if (claimStep === "connect") setClaimStep("otp");
-  };
+ 
 
   // if they just connected (not yet moved to otp step), advance
   if (isConnected && claimStep === "connect") {

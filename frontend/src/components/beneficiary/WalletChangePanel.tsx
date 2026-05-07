@@ -2,10 +2,8 @@ import { useState } from "react";
 import { getAddress } from "ethers";
 import {  CheckCircle2, RefreshCw, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { dismissToast, loadingMessage, successMessage, errorMessage } from "@/utils/messageStatus";
-import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
 
 interface WalletChangePanelProps {
-  beneficiaryId: bigint;
   currentWallet: string;
   /** Called after a successful confirmWalletChange so the parent can re-fetch */
   onWalletChanged: () => Promise<void>;
@@ -14,17 +12,17 @@ interface WalletChangePanelProps {
     args: unknown[],
     gas: bigint
   ) => Promise<{ success: boolean }>;
+  estimateGas: (name: string, args: unknown[]) => Promise<bigint | null>;
 }
 
 type Step = "idle" | "requested" | "confirmed";
 
 const WalletChangePanel = ({
-  beneficiaryId,
   currentWallet,
   onWalletChanged,
   callWriteFunction,
+  estimateGas,
 }: WalletChangePanelProps) => {
-    // const {estimateGas} = useGasEstimator("child", resolvedChildAddress);
   const [isOpen, setIsOpen] = useState(false);
   const [newWallet, setNewWallet] = useState("");
   const [pendingWallet, setPendingWallet] = useState<string | null>(null); // temp state after request
