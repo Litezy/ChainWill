@@ -29,7 +29,7 @@ export function ExampleFullScreenLoader() {
 
 // Example 2: Inline loader (for form sections)
 export function ExampleInlineLoader() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, ] = useState(false);
 
   return (
     <div className="form-section">
