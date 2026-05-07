@@ -12,4 +12,4 @@ forge script script/Deploy.s.sol:DeployScript \
 
 
 
-  forge verify-contract --chain sepolia --watch 0x72368398a14d3F7b22a41f030F538Ac2890Ea54d src/core/ChainWill.sol:ChainWill
+  forge verify-contract --chain sepolia --watch 0xc17c6527db1da7455ea22b8be7f9d1e74705db4c src/core/ChainWill.sol:ChainWill

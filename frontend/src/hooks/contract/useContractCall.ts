@@ -1,3 +1,4 @@
+import { useCallback } from "react"
 import { errorMessage } from "@/utils/messageStatus"
 import { useContract } from "./useContract"
 
@@ -17,17 +18,20 @@ export const useCallContract = (
     address: childAddress, 
   })
 
-  const assertContract = (needsSigner = false): boolean => {
-    if (needsSigner && !writeContract) {
-      errorMessage("Wallet not connected")
-      return false
-    }
-    if (!readContract) {
-      errorMessage("Contract not found")
-      return false
-    }
-    return true
-  }
+  const assertContract = useCallback(
+    (needsSigner = false): boolean => {
+      if (needsSigner && !writeContract) {
+        errorMessage("Wallet not connected")
+        return false
+      }
+      if (!readContract) {
+        errorMessage("Contract not found")
+        return false
+      }
+      return true
+    },
+    [readContract, writeContract]
+  )
 
   return {
     readContract,

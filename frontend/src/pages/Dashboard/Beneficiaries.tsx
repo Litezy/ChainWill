@@ -1,70 +1,58 @@
+import { useMemo, useState } from "react";
+import { Plus, UserPlus, ShieldCheck, FileText, Edit2, Trash2 } from "lucide-react";
+import AddBeneficiary from "@/modals/AddBeneficiary";
+import UpdateBeneficiary from "@/modals/UpdateBeneficiary";
+import { useReadBeneficiary } from "@/hooks/child/useReadBeneficiary";
+import type { BeneficiaryRecord } from "@/stores/beneficiaryStore";
 
-import { useState } from 'react';
-import { Plus, UserPlus, ShieldCheck, FileText, Edit2, Trash2 } from 'lucide-react';
-import AddBeneficiary from '@/modals/AddBeneficiary';
-import UpdateBeneficiary from '@/modals/UpdateBeneficiary';
-
-type Beneficiary = {
-  name: string;
-  role: string;
-  address: string;
-  email: string;
-  phone: string;
-  share: string;
-  status: string;
-  statusClass: string;
-};
-
-const initialBeneficiaries: Beneficiary[] = [
-  {
-    name: 'Eleanor Vance',
-    role: 'Daughter · Primary',
-    address: '0x71c...4f92',
-    email: 'eleanor@example.com',
-    phone: '+1 (555) 123-4567',
-    share: '40%',
-    status: 'Active',
-    statusClass: 'bg-emerald-100 text-emerald-700',
-  },
-  {
-    name: 'Julian Vance',
-    role: 'Son · Secondary',
-    address: '0x3aB...E912',
-    email: 'julian@example.com',
-    phone: '+1 (555) 987-6543',
-    share: '30%',
-    status: 'Active',
-    statusClass: 'bg-emerald-100 text-emerald-700',
-  },
-  {
-    name: 'Crypto Hands NGO',
-    role: 'Charity · Tertiary',
-    address: '0x9F2...D082',
-    email: 'contact@cryptohands.org',
-    phone: '+1 (555) 456-7890',
-    share: '15%',
-    status: 'Pending',
-    statusClass: 'bg-amber-100 text-amber-700',
-  },
-];
+const formatWallet = (wallet: string) =>
+  wallet.length > 12 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet;
 
 const Beneficiaries = () => {
   const [openAdd, setOpenAdd] = useState(false);
   const [openUpdate, setOpenUpdate] = useState(false);
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
-  const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>(initialBeneficiaries);
+  const [selectedBeneficiary, setSelectedBeneficiary] =
+    useState<BeneficiaryRecord | null>(null);
 
-  const handleEdit = (beneficiary: Beneficiary) => {
+  const {
+    beneficiaries,
+    remainingPercentBps,
+    remainingPercent,
+    allocatedPercent,
+    isLoading,
+    isSubmitting,
+    addBeneficiary,
+    updateBeneficiary,
+    removeBeneficiary,
+  } = useReadBeneficiary();
+
+  const allocationWidth = `${Math.min(allocatedPercent, 100)}%`;
+
+  const verifiedInitials = useMemo(
+    () =>
+      beneficiaries.slice(0, 3).map((item) =>
+        item.name
+          .split(" ")
+          .map((part) => part[0] ?? "")
+          .join("")
+          .slice(0, 2)
+          .toUpperCase()
+      ),
+    [beneficiaries]
+  );
+
+  const handleEdit = (beneficiary: BeneficiaryRecord) => {
     setSelectedBeneficiary(beneficiary);
     setOpenUpdate(true);
   };
 
-  const handleUpdate = (updated: Beneficiary, updateType: 'percentage' | 'address') => {
-    setBeneficiaries((current) =>
-      current.map((b) => (b.address === updated.address ? updated : b))
+  const handleRemove = async (beneficiary: BeneficiaryRecord) => {
+    const confirmed = window.confirm(
+      `Remove ${beneficiary.name || "this beneficiary"} from the will?`
     );
-    // Here you would call the contract function based on updateType
-    console.log('Updating beneficiary:', updated, 'Type:', updateType);
+    if (!confirmed) return;
+
+    await removeBeneficiary(beneficiary.id);
   };
 
   return (
@@ -72,7 +60,9 @@ const Beneficiaries = () => {
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase text-slate-500">Beneficiaries</p>
-          <h1 className="mt-3 text-2xl font-semibold text-slate-950">Registered beneficiary controls</h1>
+          <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+            Registered beneficiary controls
+          </h1>
         </div>
 
         <button
@@ -90,11 +80,15 @@ const Beneficiaries = () => {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase text-slate-500">Total allocation</p>
-              <p className="mt-2 text-3xl font-semibold text-slate-950">85%</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-950">
+                {allocatedPercent}%
+              </p>
             </div>
             <div className="text-right">
               <p className="text-sm font-semibold text-slate-500">Unallocated remaining</p>
-              <p className="mt-2 text-xl font-semibold text-slate-950">15%</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950">
+                {remainingPercent}%
+              </p>
             </div>
           </div>
 
@@ -104,9 +98,11 @@ const Beneficiaries = () => {
               <span>100%</span>
             </div>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full w-[85%] rounded-full bg-primary" />
+              <div className="h-full rounded-full bg-primary" style={{ width: allocationWidth }} />
             </div>
-            <p className="mt-3 text-sm text-slate-500">Distributing 12,450.00 ETH equivalent</p>
+            <p className="mt-3 text-sm text-slate-500">
+              Remaining: {remainingPercentBps} basis points.
+            </p>
           </div>
         </div>
 
@@ -114,14 +110,23 @@ const Beneficiaries = () => {
           <p className="text-sm font-semibold uppercase text-slate-500">Beneficiary count</p>
           <div className="mt-4 flex items-center justify-between gap-4">
             <div>
-              <p className="text-3xl font-semibold text-slate-950">06</p>
-              <p className="text-sm text-slate-500">Verified identities</p>
+              <p className="text-3xl font-semibold text-slate-950">{beneficiaries.length}</p>
+              <p className="text-sm text-slate-500">Registered on-chain recipients</p>
             </div>
             <div className="flex -space-x-2">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">EV</span>
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">JV</span>
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">CH</span>
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">+3</span>
+              {verifiedInitials.map((initials) => (
+                <span
+                  key={initials}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700"
+                >
+                  {initials}
+                </span>
+              ))}
+              {beneficiaries.length > 3 ? (
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
+                  +{beneficiaries.length - 3}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -131,7 +136,9 @@ const Beneficiaries = () => {
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
           <div>
             <p className="text-sm font-semibold text-slate-500">Registered beneficiaries</p>
-            <p className="text-sm text-slate-500">Manage individuals who will receive assets upon testament execution.</p>
+            <p className="text-sm text-slate-500">
+              Manage individuals who will receive assets upon testament execution.
+            </p>
           </div>
           <button
             type="button"
@@ -156,16 +163,25 @@ const Beneficiaries = () => {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {beneficiaries.map((item) => (
-                <tr key={item.address} className="hover:bg-slate-50">
+                <tr key={item.id} className="hover:bg-slate-50">
                   <td className="px-4 py-4">
                     <div className="font-semibold text-slate-950">{item.name}</div>
                     <div className="text-sm text-slate-500">{item.role}</div>
+                    <div className="text-xs text-slate-400">{item.email}</div>
                   </td>
-                  <td className="px-4 py-4 text-slate-500">{item.address}</td>
-                  <td className="px-4 py-4 font-semibold text-slate-950">{item.share}</td>
+                  <td className="px-4 py-4 text-slate-500">{formatWallet(item.wallet)}</td>
+                  <td className="px-4 py-4 font-semibold text-slate-950">
+                    {item.percentBps / 100}%
+                  </td>
                   <td className="px-4 py-4">
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${item.statusClass}`}>
-                      {item.status}
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        item.claimed
+                          ? "bg-slate-200 text-slate-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {item.claimed ? "Claimed" : "Active"}
                     </span>
                   </td>
                   <td className="px-4 py-4">
@@ -177,7 +193,11 @@ const Beneficiaries = () => {
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
-                      <button className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 transition hover:bg-rose-100 hover:text-rose-700">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(item)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 transition hover:bg-rose-100 hover:text-rose-700"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -186,42 +206,58 @@ const Beneficiaries = () => {
               ))}
             </tbody>
           </table>
+
+          {!isLoading && beneficiaries.length === 0 ? (
+            <p className="px-4 py-8 text-sm text-slate-500">
+              No beneficiaries found yet. Add one to start allocating your will.
+            </p>
+          ) : null}
         </div>
         <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 text-sm text-slate-500">
-          Beneficiaries must verify their identity via zero-knowledge proof before the 'Pending' status is cleared.
+          Beneficiary percentages are validated against the contract&apos;s 10,000 basis point maximum.
         </div>
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <div className="rounded-[28px] border border-slate-200 bg-primary text-white p-6 shadow-sm shadow-primary/20">
+        <div className="rounded-[28px] border border-slate-200 bg-primary p-6 text-white shadow-sm shadow-primary/20">
           <div className="flex items-center gap-3 text-white">
             <ShieldCheck className="h-5 w-5" />
             <p className="text-sm font-semibold">Smart Verification</p>
           </div>
           <p className="mt-4 text-sm leading-7 text-slate-100">
-            Beneficiaries added to your digital testament are automatically notified to link their decentralized identifiers (DIDs) for secure legacy transfer.
+            Beneficiary records are now read directly from the deployed will contract and kept in sync with local dashboard state.
           </p>
         </div>
 
         <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-6 shadow-sm shadow-slate-200/50">
           <div className="flex items-center gap-3 text-slate-950">
             <FileText className="h-5 w-5 text-primary" />
-            <p className="text-sm font-semibold text-slate-950">Legal Validity</p>
+            <p className="text-sm font-semibold text-slate-950">Allocation Safety</p>
           </div>
           <p className="mt-4 text-sm leading-7 text-slate-600">
-            Each beneficiary registration is timestamped on the blockchain, creating an immutable paper trail that holds technical finality.
+            All beneficiary percentages are converted to basis points before submission so the total never exceeds 100%.
           </p>
         </div>
       </div>
 
-      {openAdd && <AddBeneficiary onClose={() => setOpenAdd(false)} />}
-      {openUpdate && selectedBeneficiary && (
+      {openAdd ? (
+        <AddBeneficiary
+          onClose={() => setOpenAdd(false)}
+          onAdd={addBeneficiary}
+          remainingPercentBps={remainingPercentBps}
+          isSubmitting={isSubmitting}
+        />
+      ) : null}
+
+      {openUpdate && selectedBeneficiary ? (
         <UpdateBeneficiary
           beneficiary={selectedBeneficiary}
+          remainingPercentBps={remainingPercentBps}
+          isSubmitting={isSubmitting}
           onClose={() => setOpenUpdate(false)}
-          onUpdate={handleUpdate}
+          onUpdate={updateBeneficiary}
         />
-      )}
+      ) : null}
     </div>
   );
 };

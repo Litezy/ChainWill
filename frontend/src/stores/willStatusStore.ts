@@ -10,6 +10,9 @@ export type WillStatusState = {
   triggerUnlocksAt: number;
   triggered: boolean;
   locked: boolean;
+  inactivityPeriod: number;
+  lastCheckIn: number;
+  gracePeriod: number;
   finalPool: string;
   lastUpdatedAt: number | null;
   isLoading: boolean;
@@ -24,6 +27,9 @@ export type WillStatusState = {
     triggerUnlocksAt: number;
     triggered: boolean;
     locked: boolean;
+    inactivityPeriod: number;
+    lastCheckIn: number;
+    gracePeriod: number;
     finalPool: string;
   }) => void;
   setLoading: (isLoading: boolean) => void;
@@ -39,6 +45,9 @@ const initialState = {
   timeRemaining: 0,
   attestationOpensAt: 0,
   triggerUnlocksAt: 0,
+  inactivityPeriod: 0,
+  lastCheckIn: 0,
+  gracePeriod: 0,
   triggered: false,
   locked: false,
   finalPool: "0",
@@ -75,6 +84,9 @@ export const useWillStatusStore = create<WillStatusState>()(
         triggerUnlocksAt: state.triggerUnlocksAt,
         triggered: state.triggered,
         locked: state.locked,
+        inactivityPeriod: state.inactivityPeriod,
+        lastCheckIn: state.lastCheckIn,
+        gracePeriod: state.gracePeriod,
         finalPool: state.finalPool,
         lastUpdatedAt: state.lastUpdatedAt,
       }),

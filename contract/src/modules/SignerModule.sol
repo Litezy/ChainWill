@@ -60,7 +60,14 @@ abstract contract SignerModule is WillBase, IEvents {
     ///         If old signer had already attested, their vote is removed.
     /// @param oldSigner Address of signer to remove
     /// @param newSigner Address of signer to add
-    function replaceSigner(address oldSigner, address newSigner) external {
+    /// @param name      Signer name
+    /// @param email     Signer email
+    function replaceSigner(
+        address oldSigner,
+        address newSigner,
+        string calldata name,
+        string calldata email
+    ) external {
         require(msg.sender == s.owner,    "Not owner");
         require(!s.locked,                "Will is locked");
         require(s.isSigner[oldSigner],    "Old address is not a signer");
@@ -82,8 +89,15 @@ abstract contract SignerModule is WillBase, IEvents {
 
         // update the signers array
         for (uint256 i = 0; i < s.signers.length; i++) {
-            if (s.signers[i] == oldSigner) {
-                s.signers[i] = newSigner;
+            if (s.signers[i].wallet == oldSigner) {
+                s.signers[i] = WillLib.Signer({
+                    id: s.signers[i].id,
+                    wallet: newSigner,
+                    signed: false,
+                    signedAt: 0,
+                    name: name,
+                    email: email
+                });
                 break;
             }
         }
@@ -95,8 +109,17 @@ abstract contract SignerModule is WillBase, IEvents {
     // VIEWS
     // ─────────────────────────────────────────────────────────────────────
 
-    /// @notice Returns full list of registered signers.
+    /// @notice Returns full list of registered signer addresses.
     function getSigners() external view returns (address[] memory) {
+        address[] memory signers = new address[](s.signers.length);
+        for (uint256 i = 0; i < s.signers.length; i++) {
+            signers[i] = s.signers[i].wallet;
+        }
+        return signers;
+    }
+
+    /// @notice Returns all signer details, including name and email.
+    function getSignersWithDetails() external view returns (WillLib.Signer[] memory) {
         return s.signers;
     }
 
@@ -109,7 +132,16 @@ abstract contract SignerModule is WillBase, IEvents {
         return (s.attestationOpen, s.signatureCount, s.requiredSignatures);
     }
 
-    
+    /// @notice Returns signer details by email.
+    function getSignerByEmail(string calldata email) external view returns (WillLib.Signer memory) {
+        bytes32 target = keccak256(bytes(email));
+        for (uint256 i = 0; i < s.signers.length; i++) {
+            if (keccak256(bytes(s.signers[i].email)) == target) {
+                return s.signers[i];
+            }
+        }
+        revert("Signer not found");
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     // INTERNAL — implemented by TriggerModule, resolved in ChainWill

@@ -1,5 +1,5 @@
 import { ShieldCheck } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { useCallWriteMethods } from "@/hooks/contract/useCallWriteMethods";
 import { useGasEstimator } from "@/hooks/contract/useGasEstimator";
@@ -10,10 +10,23 @@ const CheckinButton: React.FC = () => {
   const { callWriteFunction } = useCallWriteMethods("child");
   const { estimateGas } = useGasEstimator("child");
   const triggerRefresh = useWillStatusStore((state) => state.triggerRefresh);
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const triggerUnlocksAt = useWillStatusStore((state) => state.triggerUnlocksAt);
-  const triggered = useWillStatusStore((state) => state.triggered);
-  const [now,] = useState(Date.now());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const triggerUnlocksAt = useWillStatusStore((state) => state.triggerUnlocksAt);
+  // const triggered = useWillStatusStore((state) => state.triggered);
+  const lastCheckIn = useWillStatusStore((state) => state.lastCheckIn);
+  const inactivityPeriod = useWillStatusStore((state) => state.inactivityPeriod);
+  const gracePeriod = useWillStatusStore((state) => state.gracePeriod);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const handleCheckIn = async () => {
     setIsSubmitting(true);
@@ -35,8 +48,10 @@ const CheckinButton: React.FC = () => {
   };
 
   const nowInSeconds = Math.floor(now / 1000);
-  const gracePeriodExpired = triggered && triggerUnlocksAt > 0 && nowInSeconds >= triggerUnlocksAt;
-  const gracePeriodActive = triggered && triggerUnlocksAt > 0 && nowInSeconds < triggerUnlocksAt;
+  const graceStart = lastCheckIn + inactivityPeriod;
+  const graceExpiresAt = lastCheckIn > 0 ? graceStart + gracePeriod : 0;
+  const gracePeriodExpired = lastCheckIn > 0 && gracePeriod > 0 && nowInSeconds >= graceExpiresAt;
+  const gracePeriodActive = lastCheckIn > 0 && nowInSeconds >= graceStart && nowInSeconds < graceExpiresAt;
 
   return (
     <button
@@ -51,7 +66,7 @@ const CheckinButton: React.FC = () => {
       {isSubmitting
         ? "Checking in..."
         : gracePeriodExpired
-          ? "Grace period expired"
+          ? "Expired"
           : gracePeriodActive
             ? "Check in before timeout"
             : "I'm Alive Check-in"}

@@ -11,6 +11,8 @@ contract SignerModuleTest is Test {
     ChainWill will;
     MockERC20 token;
 
+    address constant TOKEN = 0x9b068dC0418064C11d9bc563edC26890DD95a60e;
+
     address owner   = makeAddr("owner");
     address signer1 = makeAddr("signer1");
     address signer2 = makeAddr("signer2");
@@ -19,15 +21,21 @@ contract SignerModuleTest is Test {
 
     function setUp() public {
         factory = new ChainWillFactory(platform);
-        token   = new MockERC20();
+        vm.etch(TOKEN, type(MockERC20).runtimeCode);
+        token = MockERC20(TOKEN);
         token.mint(owner, 1000e18);
 
-        address[] memory signers = new address[](2);
-        signers[0] = signer1;
-        signers[1] = signer2;
+        WillLib.SignerInput[] memory signers = new WillLib.SignerInput[](2);
+        signers[0] = WillLib.SignerInput({wallet: signer1, name: "", email: ""});
+        signers[1] = WillLib.SignerInput({wallet: signer2, name: "", email: ""});
+        WillLib.OwnerInfo memory ownerInfo = WillLib.OwnerInfo({
+            name: "",
+            email: "",
+            wallet: owner
+        });
 
         vm.prank(owner);
-        address willAddr = factory.createWill( signers);
+        address willAddr = factory.createWill(signers, ownerInfo);
         will = ChainWill(willAddr);
 
         vm.prank(owner);
@@ -35,10 +43,17 @@ contract SignerModuleTest is Test {
 
 
         vm.prank(owner);
-        will.addBeneficiary(makeAddr("ben"), 10_000);
+        will.addBeneficiary(makeAddr("ben"), 10_000, "", "", "");
+    }
+
+    function _openAttestation() internal {
+        vm.warp(block.timestamp + 20 minutes);
+        will.triggerByTime();
     }
 
     function test_triggerBySigners_bothSign() public {
+        _openAttestation();
+
         vm.prank(signer1);
         will.triggerBySigners();
 
@@ -49,6 +64,8 @@ contract SignerModuleTest is Test {
     }
 
     function test_revokeAttestation() public {
+        _openAttestation();
+
         vm.prank(signer1);
         will.triggerBySigners();
 
@@ -62,7 +79,7 @@ contract SignerModuleTest is Test {
         address newSigner = makeAddr("newSigner");
 
         vm.prank(owner);
-        will.replaceSigner(signer1, newSigner);
+        will.replaceSigner(signer1, newSigner, "", "");
 
         address[] memory signers = will.getSigners();
         bool found = false;
@@ -80,6 +97,8 @@ contract SignerModuleTest is Test {
 }
 
 function test_revert_signTwice() public {
+    _openAttestation();
+
     vm.prank(signer1);
     will.triggerBySigners();
 
@@ -97,12 +116,12 @@ function test_revert_revokeWithoutSign() public {
 function test_revert_replaceWithOwner() public {
     vm.prank(owner);
     vm.expectRevert("Owner cannot be a signer"); // ✅
-    will.replaceSigner(signer1, owner);
+    will.replaceSigner(signer1, owner, "", "");
 }
 
 function test_revert_replaceNonSigner() public {
     vm.prank(owner);
     vm.expectRevert("Old address is not a signer"); // ✅
-    will.replaceSigner(stranger, makeAddr("x"));
+    will.replaceSigner(stranger, makeAddr("x"), "", "");
 }
 }

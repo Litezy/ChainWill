@@ -24,9 +24,9 @@ export const GeneralPages = [
 
 export const StandalonePages = [
   { path: "/claim-inheritance/:email", component: ClaimInheritance },
-  {path: "/create-will", component: CreateNewWill },
+  {path: "/create-will", component: CreateNewWill ,props: { onClose: () => {} }},
   {path: "/admin", component: Admin },
-  {path: "sign-inheritance", component: SignInheritance}
+  {path: "/sign-inheritance/:email", component: SignInheritance}
 ];
 
 export const DashboardPages = [
@@ -40,8 +40,14 @@ export const DashboardPages = [
 
 //links from email
 // signers 
-// http://localhost:5173/sign-inheritance/signersemail
+// http://localhost:5173/sign-inheritance/email?contract=CA for localhost
+//  https://chain-will.vercel.app/sign-inheritance/email?contract=CA for production
 
 //beneficiaries 
-// http://localhost:5173/claim-inheritance/beneficiaryemail'
+// http://localhost:5173/claim-inheritance/email?contract=CA for localhost
+// https://chain-will.vercel.app/claim-inheritance/email?contract=CA for production
 
+
+// admin 
+// http://localhost:5173/admin?contract=CA for localhost
+// https://chain-will.vercel.app/admin?contract=CA for production

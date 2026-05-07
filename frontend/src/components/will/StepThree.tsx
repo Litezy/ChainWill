@@ -6,7 +6,6 @@ type Signer = {
 
 type Props = {
   selectedToken: { symbol: string; label: string };
-  displayBalance: string;
   ownerName: string;
   ownerEmail: string;
   signers: Signer[];
@@ -14,7 +13,6 @@ type Props = {
 
 const StepThree = ({
   selectedToken,
-  displayBalance,
   ownerName,
   ownerEmail,
   signers,
@@ -24,7 +22,7 @@ const StepThree = ({
       <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
         <p className="text-sm font-semibold text-slate-900">Selected token</p>
         <p className="mt-3 text-base text-slate-950">{selectedToken.label}</p>
-        <p className="text-sm text-slate-500">Balance: {displayBalance}</p>
+        {/* <p className="text-sm text-slate-500">Balance: {displayBalance}</p> */}
       </div>
 
       <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
