@@ -3,19 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import willRoutes from './routes/will.routes';
-import beneficiaryRoutes from './routes/beneficiary.routes';
-import signerRoutes from './routes/signer.routes';
-import { web3EventService } from './services/web3EventService';
+import communicationRoutes from './routes/communication.routes';
 import { prisma } from './config/db';
-import { notificationWorker } from './workers/notificationWorker';
-import { notificationQueue } from './queues/notificationQueue';
 
 dotenv.config();
 
 const app = express();
-const shouldAutostartNotificationWorker =
-  process.env.NOTIFICATION_WORKER_AUTOSTART !== 'false';
 
 // Middleware
 app.use(helmet());
@@ -24,30 +17,19 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 // Routes
-app.use('/api/wills', willRoutes);
-app.use('/api/beneficiary', beneficiaryRoutes);
-app.use('/api/signer', signerRoutes);
+app.use('/api/communication', communicationRoutes);
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
-  const dbConnected = (global as any).dbConnected || false;
-  const web3Status = web3EventService.getStatus();
+  const dbConnected = Boolean((global as { dbConnected?: boolean }).dbConnected);
   res.status(200).json({
     status: 'OK',
-    message: 'ChainWill API is running',
+    message: 'ChainWill communication API is running',
     database: dbConnected ? 'connected' : 'disconnected',
-    web3Services:
-      dbConnected && web3EventService.isHealthy() ? 'running' : 'stopped',
-    relayer: dbConnected
-      ? web3Status.inactivityMonitor
-      : {
-          running: false,
-          configured: false,
-          relayerAddress: null,
-          lastCompletedAt: null,
-        },
-    notifications:
-      dbConnected && notificationWorker.isHealthy() ? 'running' : 'stopped',
+    services: {
+      email: 'running',
+      otp: dbConnected ? 'running' : 'stopped',
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -70,25 +52,7 @@ const server = app.listen(PORT, async () => {
   }
 
   // Store db status globally for health checks
-  (global as any).dbConnected = dbConnected;
-
-  if (dbConnected) {
-    try {
-      if (shouldAutostartNotificationWorker) {
-        await notificationWorker.start();
-      } else {
-        console.log('[Server] Notification worker autostart disabled');
-      }
-
-      // Start Web3 event listeners and background jobs only if DB is connected
-      await web3EventService.start();
-    } catch (error) {
-      console.error('Failed to start Web3 services:', error);
-      // Continue running the server even if services fail to start
-    }
-  } else {
-    console.warn('Web3 services disabled until database connection is available');
-  }
+  (global as { dbConnected?: boolean }).dbConnected = dbConnected;
 });
 
 // Graceful shutdown
@@ -96,9 +60,6 @@ process.on('SIGTERM', async () => {
   console.log('SIGTERM signal received: closing HTTP server');
   server.close(async () => {
     console.log('HTTP server closed');
-    await web3EventService.stop();
-    await notificationWorker.stop();
-    await notificationQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
@@ -108,9 +69,6 @@ process.on('SIGINT', async () => {
   console.log('SIGINT signal received: closing HTTP server');
   server.close(async () => {
     console.log('HTTP server closed');
-    await web3EventService.stop();
-    await notificationWorker.stop();
-    await notificationQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
@@ -119,7 +77,6 @@ process.on('SIGINT', async () => {
 // Handle uncaught exceptions
 process.on('uncaughtException', async (error) => {
   console.error('Uncaught Exception:', error);
-  await web3EventService.stop();
   await prisma.$disconnect();
   process.exit(1);
 });
