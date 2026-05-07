@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
+import { useAccount } from "wagmi";
 import { useWillStatusStore } from "@/stores/willStatusStore";
 import { formatUnits } from "ethers";
 import { formatCompact } from "@/utils/pageHelpers";
@@ -7,6 +8,8 @@ import { useCreateWill } from "@/hooks/factory/useCreateWill";
 import StepOne from "@/components/will/StepOne";
 import StepTwo from "@/components/will/StepTwo";
 import StepThree from "@/components/will/StepThree";
+import { useNavigate } from "react-router-dom";
+import Loader from "@/components/Loader";
 
 type Signer = {
   name: string;
@@ -19,20 +22,26 @@ type TokenOption = {
   label: string;
 };
 
+type CreateNewWillProps = {
+  onClose?: () => void;
+};
 const tokenOptions: TokenOption[] = [
   { symbol: "CWT", label: "ChainWill Token (CWT)" },
 ];
 
-const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
+const CreateNewWill: React.FC<CreateNewWillProps> = ({ onClose }) => {
   const walletBalance = useWillStatusStore((state) => state.ownerWalletBalance);
   const displayBalance = formatCompact(formatUnits(walletBalance, 18));
   const { createWill, isSubmitting } = useCreateWill();
+  const { address: ownerWalletAddress } = useAccount();
 
   const [step, setStep] = useState(1);
   const [validationError, setValidationError] = useState("");
 
   // Step 1 state
-  const [selectedToken, setSelectedToken] = useState<TokenOption>(tokenOptions[0]);
+  const [selectedToken, setSelectedToken] = useState<TokenOption>(
+    tokenOptions[0],
+  );
   const [ownerName, setOwnerName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
 
@@ -41,7 +50,9 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
   const [signerName, setSignerName] = useState("");
   const [signerAddress, setSignerAddress] = useState("");
   const [signerEmail, setSignerEmail] = useState("");
+  const [loading, setLoading] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const navig = useNavigate();
 
   const stepLabel = useMemo(() => {
     if (step === 1) return "Select legacy token";
@@ -72,6 +83,13 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
       setValidationError("Invalid email format.");
       return;
     }
+    if (
+      ownerWalletAddress &&
+      trimmedAddress.toLowerCase() === ownerWalletAddress.toLowerCase()
+    ) {
+      setValidationError("Owner wallet cannot be added as a signer.");
+      return;
+    }
     if (!isAddressUnique(trimmedAddress, editingIndex ?? undefined)) {
       setValidationError("Wallet address must be unique.");
       return;
@@ -81,7 +99,9 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
       return;
     }
     if (trimmedEmail === ownerEmail.trim()) {
-      setValidationError("Signer email cannot be the same as the owner's email.");
+      setValidationError(
+        "Signer email cannot be the same as the owner's email.",
+      );
       return;
     }
 
@@ -89,9 +109,13 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
       setSigners((current) =>
         current.map((s, i) =>
           i === editingIndex
-            ? { name: trimmedName, address: trimmedAddress, email: trimmedEmail }
-            : s
-        )
+            ? {
+                name: trimmedName,
+                address: trimmedAddress,
+                email: trimmedEmail,
+              }
+            : s,
+        ),
       );
       setEditingIndex(null);
     } else {
@@ -117,6 +141,8 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
     setValidationError("");
   };
 
+  
+
   const handleRemoveSigner = (index: number) => {
     setSigners((current) => current.filter((_, i) => i !== index));
     if (editingIndex === index) {
@@ -135,6 +161,10 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
         setValidationError("Owner name and email are required.");
         return;
       }
+      if (!/^\S+@\S+\.\S+$/.test(ownerEmail.trim())) {
+        setValidationError("Invalid owner email format.");
+        return;
+      }
       setStep(2);
       return;
     }
@@ -149,18 +179,36 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
     }
 
     if (step === 3) {
-      const success = await createWill({
-        ownerName,
-        ownerEmail,
-        token: selectedToken.symbol,
-        signers,
-      });
-      if (success) onClose();
+      setLoading(true);
+      // return console.log("Submitting will with data:", {
+      //   ownerName,
+      //   ownerEmail,
+      //   signers,
+      // });
+      try {
+        // signers are passed through as full signer inputs
+        // (name, wallet address, email) to the factory contract.
+        const success = await createWill({
+          ownerName,
+          ownerEmail,
+          signers,
+        });
+        if (success) {
+          navig("/auth/overview");
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const canAddSigner =
-    !!signerName.trim() && !!signerAddress.trim() && !!signerEmail.trim() && signers.length < 3;
+    !!signerName.trim() &&
+    !!signerAddress.trim() &&
+    !!signerEmail.trim() &&
+    signers.length < 3;
   const canProceedToStep3 = signers.length >= 2;
 
   return (
@@ -205,8 +253,8 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
             {step === 1
               ? "Choose the legacy token for your digital testament."
               : step === 2
-              ? "Add 2-3 signers with their name, wallet address, and reminder email for proof-of-life verification. You need at least 2 signers to proceed."
-              : "Review the chosen token and signer list before submission."}
+                ? "Add 2-3 signers with their name, wallet address, and reminder email for proof-of-life verification. You need at least 2 signers to proceed."
+                : "Review the chosen token and signer list before submission."}
           </p>
         </div>
 
@@ -244,7 +292,6 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
           {step === 3 && (
             <StepThree
               selectedToken={selectedToken}
-              displayBalance={displayBalance}
               ownerName={ownerName}
               ownerEmail={ownerEmail}
               signers={signers}
@@ -284,13 +331,22 @@ const CreateNewWill = ({ onClose }: { onClose: () => void }) => {
               {isSubmitting
                 ? "Submitting..."
                 : step < 3
-                ? `Continue to Step ${step + 1}`
-                : "Submit Will"}
+                  ? `Continue to Step ${step + 1}`
+                  : "Submit Will"}
               {!isSubmitting && <ChevronRight className="ml-2 h-4 w-4" />}
             </button>
           </div>
         </div>
       </div>
+
+      {loading && (
+        <Loader
+          isLoading={loading}
+          variant="spinner"
+          text="Creating will..."
+          fullScreen={false}
+        />
+      )}
     </div>
   );
 };

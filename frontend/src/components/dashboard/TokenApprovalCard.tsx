@@ -33,7 +33,7 @@ export default function TokenApprovalCard() {
 
   useTokenAllowance({
     tokenAddress: CHAINWILL_TOKEN_CONTRACT_ADDRESS,
-    spenderAddress: storedAddress,
+    spenderAddress: storedAddress!,
   });
 
   const selectedTokenLabel = useMemo(() => "CWT (ChainWill Token)", []);
@@ -83,21 +83,27 @@ export default function TokenApprovalCard() {
 
       setStoredAllowance(
         CHAINWILL_TOKEN_CONTRACT_ADDRESS,
-        storedAddress,
+        storedAddress!,
         normalizedAmount
       );
       setApprovedToken(
+        storedAddress!,
         CHAINWILL_TOKEN_CONTRACT_ADDRESS,
         "CWT",
         normalizedAmount,
-        storedAddress
+        storedAddress!,
+        address,
+        storedAddress!
       );
       addApprovalHistory({
         id: `${Date.now()}`,
         event: "Approval update",
         asset: "CWT",
         tokenAddress: CHAINWILL_TOKEN_CONTRACT_ADDRESS,
-        spender: storedAddress,
+        spender: storedAddress!,
+        contractAddress: storedAddress!,
+        willAddress: storedAddress!,
+        ownerAddress: address,
         amount: normalizedAmount,
         status: "success",
         date: new Date().toLocaleDateString("en-US", {

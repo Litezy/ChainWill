@@ -96,25 +96,27 @@ abstract contract FundingModule is WillBase, IEvents {
         uint256 triggerUnlocksAt,     // timestamp time-trigger becomes available
         bool    triggered,
         bool    locked,
+        uint256 inactivityPeriod,
+        uint256 lastCheckIn,       
+        uint256 gracePeriod,            
         uint256 finalPool             // set after trigger, 0 before
     ) {
-        uint256 allowance    = IERC20(s.token).allowance(s.owner, address(this));
-        uint256 ownerBal     = IERC20(s.token).balanceOf(s.owner);
-        uint256 effective    = allowance < ownerBal ? allowance : ownerBal;
-        uint256 triggerTime  = s.claimTriggerAt();
-        uint256 remaining    = block.timestamp >= triggerTime
-                               ? 0
-                               : triggerTime - block.timestamp;
+        uint256 allowance = IERC20(s.token).allowance(s.owner, address(this));
+        uint256 ownerBal  = IERC20(s.token).balanceOf(s.owner);
+        uint256 triggerTime = s.claimTriggerAt();
 
         return (
             allowance,
             ownerBal,
-            effective,
-            remaining,
+            allowance < ownerBal ? allowance : ownerBal,
+            block.timestamp >= triggerTime ? 0 : triggerTime - block.timestamp,
             s.attestationStartAt(),
             triggerTime,
             s.triggered,
             s.locked,
+            s.inactivityPeriod,
+            s.lastCheckIn,
+            s.gracePeriod,
             s.finalPool
         );
     }

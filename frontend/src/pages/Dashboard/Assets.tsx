@@ -19,7 +19,7 @@ const Assets = () => {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <span className="inline-flex items-center rounded-full bg-rose-100 p-3 text-sm font-semibold text-rose-700">
-            Protocol active
+            Protocol Status
           </span>
           <CheckinButton/>
         </div>

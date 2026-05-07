@@ -5,6 +5,7 @@ import "../modules/FundingModule.sol";
 import "../modules/BeneficiaryModule.sol";
 import "../modules/SignerModule.sol";
 import "../modules/TriggerModule.sol";
+import "../libraries/WillLib.sol";
 
 /// @title ChainWill
 /// @notice Core will contract. Deployed per user via ChainWillFactory.
@@ -36,10 +37,11 @@ contract ChainWill is
     /// @param _platformAddress   Address that receives the 0.5% platform fee
     constructor(
         address _admin,
-        address[] memory _signers,
+        WillLib.SignerInput[] memory _signers,
         uint256   _inactivityPeriod,
         address   _owner,
-        address   _platformAddress
+        address   _platformAddress,
+        WillLib.OwnerInfo memory _ownerInfo
     ) {
         // ── validate inputs ───────────────────────────────────────────
         require(_owner           != address(0), "Invalid owner address");
@@ -54,19 +56,27 @@ contract ChainWill is
         s.token           = address(0x9b068dC0418064C11d9bc563edC26890DD95a60e);
         s.platformAddress = _platformAddress;
         s.inactivityPeriod = _inactivityPeriod;
-        s.gracePeriod     = 2 minutes;         // default 7 day grace period
+        s.gracePeriod     = 5 minutes;         // default 15mins grace period
         s.lastCheckIn     = block.timestamp; // owner starts with full period
         s.PLATFORM_FEE_BP = 50;             // 0.5% = 50 basis points
+        s.ownerInfo = _ownerInfo;
 
         // ── register signers ──────────────────────────────────────────
         for (uint256 i = 0; i < _signers.length; i++) {
-            address signer = _signers[i];
-            require(signer != address(0), "Invalid signer address");
-            require(!s.isSigner[signer],  "Duplicate signer address");
-            require(signer != _owner,     "Owner cannot be a signer");
+            WillLib.SignerInput memory signerInput = _signers[i];
+            require(signerInput.wallet != address(0), "Invalid signer address");
+            require(!s.isSigner[signerInput.wallet], "Duplicate signer address");
+            require(signerInput.wallet != _owner, "Owner cannot be a signer");
 
-            s.signers.push(signer);
-            s.isSigner[signer] = true;
+            s.signers.push(WillLib.Signer({
+                id: i + 1,
+                wallet: signerInput.wallet,
+                signed: false,
+                signedAt: 0,
+                name: signerInput.name,
+                email: signerInput.email
+            }));
+            s.isSigner[signerInput.wallet] = true;
         }
 
         // 1 signer → requires 1 signature
@@ -127,6 +137,16 @@ contract ChainWill is
     /// @notice Returns the will owner address.
     function getOwner() external view returns (address) {
         return s.owner;
+    }
+
+    /// @notice Returns the stored owner profile fields set at deployment.
+    function getOwnerProfile()
+        external
+        view
+        returns (string memory name, string memory email, address wallet)
+    {
+        WillLib.OwnerInfo storage ownerInfo = s.ownerInfo;
+        return (ownerInfo.name, ownerInfo.email, ownerInfo.wallet);
     }
 
     /// @notice Returns the ERC20 token address this will covers.

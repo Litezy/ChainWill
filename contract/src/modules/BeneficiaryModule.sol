@@ -22,11 +22,13 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
     // ADD
     // ─────────────────────────────────────────────────────────────────────
 
-    /// @notice Owner adds a beneficiary with a percentage share.
-    /// @param wallet   Beneficiary's wallet address
-    /// @param percent  Share in basis points (e.g. 5000 = 50%, 10000 = 100%)
-    function addBeneficiary(address wallet, uint256 percent) external onlyOwner {
-        require(msg.sender == s.owner, "Not owner");
+    function addBeneficiary(
+        address wallet,
+        uint256 percent,
+        string calldata name,
+        string calldata email,
+        string calldata role
+    ) external onlyOwner {
         require(!s.locked,             "Will is locked");
         require(wallet != address(0),  "Invalid wallet address");
         require(percent > 0,           "Percent must be > 0");
@@ -36,13 +38,13 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
         );
 
         // prevent duplicate beneficiary wallet
-        if(s.beneficiaryIdCounter > 0){
+        if (s.beneficiaryIdCounter > 0) {
             for (uint256 i = 0; i < s.beneficiaries.length; i++) {
-            require(
-                s.beneficiaries[i].wallet != wallet,
-                "Wallet already a beneficiary"
-            );
-        }
+                require(
+                    s.beneficiaries[i].wallet != wallet,
+                    "Wallet already a beneficiary"
+                );
+            }
         }
 
         // assign stable ID — increments from 1, never resets
@@ -56,9 +58,12 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
             wallet:    wallet,
             percent:   percent,
             claimed:   false,
-            claimedAt: 0
+            claimedAt: 0,
+            name:      name,
+            email:     email,
+            role:      role
         }));
-        s.isBenefactor[newId][wallet]=true;
+        s.isBenefactor[newId][wallet] = true;
         s.totalPercentAllocated += percent;
         emit BeneficiaryAdded(newId, wallet, percent);
     }
@@ -71,7 +76,6 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
     ///         Uses swap-and-pop — updates idToIndex for the moved item.
     /// @param id The stable beneficiary ID (NOT array index)
     function removeBeneficiary(uint256 id) external onlyOwner {
-        require(msg.sender == s.owner, "Not owner");
         require(!s.locked,             "Will is locked");
 
         uint256 index = s.idToIndex[id];
@@ -81,7 +85,8 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
         // free up the percent allocation
         s.totalPercentAllocated -= s.beneficiaries[index].percent;
 
-        emit BeneficiaryRemoved(id, s.beneficiaries[index].wallet);
+        address oldWallet = s.beneficiaries[index].wallet;
+        emit BeneficiaryRemoved(id, oldWallet);
 
         uint256 lastIndex = s.beneficiaries.length - 1;
 
@@ -94,6 +99,7 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
         }
 
         // clean up removed item
+        s.isBenefactor[id][oldWallet] = false;
         delete s.idToIndex[id];
         s.beneficiaries.pop();
     }
@@ -101,6 +107,54 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
     // ─────────────────────────────────────────────────────────────────────
     // UPDATE
     // ─────────────────────────────────────────────────────────────────────
+
+    /// @notice Owner updates a beneficiary's details and allocation.
+    /// @param id      Stable beneficiary ID
+    /// @param wallet  Beneficiary's wallet address
+    /// @param percent Share in basis points
+    /// @param name    Beneficiary name
+    /// @param email   Beneficiary email
+    /// @param role    Beneficiary role
+    function updateBeneficiary(
+        uint256 id,
+        address wallet,
+        uint256 percent,
+        string calldata name,
+        string calldata email,
+        string calldata role
+    ) external onlyOwner {
+        require(!s.locked,             "Will is locked");
+        require(wallet != address(0),  "Invalid wallet address");
+        require(percent > 0,           "Percent must be > 0");
+
+        uint256 index = s.idToIndex[id];
+        require(s.beneficiaries[index].id == id, "Invalid beneficiary ID");
+
+        WillLib.Beneficiary storage b = s.beneficiaries[index];
+        uint256 oldPercent = b.percent;
+        address oldWallet = b.wallet;
+
+        uint256 newTotal = s.totalPercentAllocated - oldPercent + percent;
+        require(newTotal <= WillLib.MAX_PERCENT, "Total allocation exceeds 100%");
+
+        if (wallet != oldWallet) {
+            // prevent duplicate wallet for another beneficiary
+            for (uint256 i = 0; i < s.beneficiaries.length; i++) {
+                if (i == index) continue;
+                require(s.beneficiaries[i].wallet != wallet, "Wallet already a beneficiary");
+            }
+            _updateBenefactorAddress(id, oldWallet, wallet);
+            b.wallet = wallet;
+        }
+
+        b.percent = percent;
+        b.name = name;
+        b.email = email;
+        b.role = role;
+        s.totalPercentAllocated = newTotal;
+
+        emit BeneficiaryUpdated(id, b.wallet, oldPercent, percent);
+    }
 
     /// @notice Owner updates a beneficiary's percentage share.
     /// @param id         Stable beneficiary ID
@@ -125,23 +179,35 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
         emit BeneficiaryUpdated(id, b.wallet, oldPercent, newPercent);
     }
 
-
-
-    /// @notice Owner updates a beneficiary's percentage share.
+    /// @notice Owner updates a beneficiary's wallet address.
     /// @param id         Stable beneficiary ID
-    /// @param _newWallet New share in basis points
+    /// @param _newWallet New wallet address
     function updateBeneficiaryAddress(uint256 id, address _newWallet) external onlyOwner {
         require(msg.sender == s.owner, "Not owner");
         require(!s.locked,             "Will is locked");
+        require(_newWallet != address(0), "Invalid wallet address");
 
         uint256 index = s.idToIndex[id];
         require(s.beneficiaries[index].id == id, "Invalid beneficiary ID");
 
         WillLib.Beneficiary storage b = s.beneficiaries[index];
         address oldWallet = b.wallet;
+
+        require(_newWallet != oldWallet, "New wallet is same as current");
+        for (uint256 i = 0; i < s.beneficiaries.length; i++) {
+            if (i == index) continue;
+            require(s.beneficiaries[i].wallet != _newWallet, "Wallet already a beneficiary");
+        }
+
+        _updateBenefactorAddress(id, oldWallet, _newWallet);
         b.wallet = _newWallet;
 
-        emit BeneficiaryAddressUpdated(id, oldWallet,_newWallet);
+        emit BeneficiaryAddressUpdated(id, oldWallet, _newWallet);
+    }
+
+    function _updateBenefactorAddress(uint256 id, address oldWallet, address newWallet) internal {
+        s.isBenefactor[id][oldWallet] = false;
+        s.isBenefactor[id][newWallet] = true;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -208,6 +274,20 @@ abstract contract BeneficiaryModule is WillBase, IEvents {
     require(s.beneficiaries[index].id == _id, "Invalid beneficiary ID");
     return s.beneficiaries[index];
 }
+
+    /// @notice Returns a beneficiary by email.
+    function getBeneficiaryByEmail(string calldata email)
+        external view
+        returns (WillLib.Beneficiary memory)
+    {
+        bytes32 target = keccak256(bytes(email));
+        for (uint256 i = 0; i < s.beneficiaries.length; i++) {
+            if (keccak256(bytes(s.beneficiaries[i].email)) == target) {
+                return s.beneficiaries[i];
+            }
+        }
+        revert("Beneficiary not found");
+    }
 
     /// @notice Returns count of registered beneficiaries.
     function beneficiaryCount() external view returns (uint256) {
