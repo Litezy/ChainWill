@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "dev:notifications": "ts-node-dev --respawn --transpile-only src/workers/notification.worker.ts",
-    "build": "npx prisma generate && tsc",
+    "build": "prisma generate && tsc",
     "test:email": "ts-node-dev --transpile-only --exit-child src/scripts/sendEmailTest.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node dist/server.js",
     "start:notifications": "node dist/workers/notification.worker.js",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy"
   },
   "keywords": [],
   "author": "",
