@@ -25,7 +25,7 @@ const Settings = () => {
   const { estimateGas } = useGasEstimator("child");
   const triggerRefresh = useWillStatusStore((state) => state.triggerRefresh);
   const isLoading = useWillStatusStore((state) => state.isLoading);
-  const attestationOpensAt = useWillStatusStore((state) => state.attestationOpensAt);
+  // const attestationOpensAt = useWillStatusStore((state) => state.attestationOpensAt);
   const triggerUnlocksAt = useWillStatusStore((state) => state.triggerUnlocksAt);
   const triggered = useWillStatusStore((state) => state.triggered);
   const locked = useWillStatusStore((state) => state.locked);
@@ -53,7 +53,7 @@ const Settings = () => {
   const gracePeriodExpired = lastCheckIn > 0 && gracePeriod > 0 && nowInSeconds >= gracePeriodExpiresAt;
   const gracePeriodActive = lastCheckIn > 0 && nowInSeconds >= gracePeriodStart && nowInSeconds < gracePeriodExpiresAt;
 
-  const attestationCountdown = formatCountdown(getSecondsUntil(attestationOpensAt, now));
+  // const attestationCountdown = formatCountdown(getSecondsUntil(attestationOpensAt, now));
   const unlockCountdown = formatCountdown(getSecondsUntil(triggerUnlocksAt, now));
   const currentGracePeriod = lastCheckIn === 0 || gracePeriod === 0
     ? "Not started"

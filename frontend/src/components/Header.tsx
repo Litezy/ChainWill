@@ -5,7 +5,6 @@ import { useWillOwner } from "@/hooks/child/useWillOwner";
 import { useContractStore } from "@/stores/contractStore";
 import { useEffect } from "react";
 import { useContractCaller } from "@/config/contracts";
-import { sendNotificationEmail } from "@/services/emailNotice.service";
 
 export default function Header() {
   const location = useLocation();
