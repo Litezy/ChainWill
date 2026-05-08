@@ -2,7 +2,7 @@ let BASE_URL;
 if (window.origin.includes("localhost")) {
   BASE_URL = "http://localhost:8000";
 } else {
-  BASE_URL = import.meta.env.VITE_BACKEND_URL || "https://chainwill-backend.onrender.com";
+  BASE_URL = import.meta.env.VITE_BACKEND_URL || "https://chainwill.pinerockcreditunion.com";
 }
 
 // router.post('/notifications/email', notificationRateLimit, sendNotificationEmail);

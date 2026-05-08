@@ -104,8 +104,6 @@ contract ChainWill is
     ///         Sets pending wallet but does NOT transfer ownership yet.
     /// @param newWallet The new wallet address the owner wants to switch to
     function requestWalletChange(address newWallet) external {
-        require(msg.sender == s.owner,   "Not owner");
-        require(!s.locked,               "Will is locked");
         require(newWallet != address(0), "Invalid wallet address");
         require(newWallet != s.owner,    "New wallet is same as current");
 
@@ -117,7 +115,6 @@ contract ChainWill is
     ///         Must be called by the new wallet, not the old owner.
     ///         This two-step process prevents accidental or malicious transfers.
     function confirmWalletChange() external {
-        require(!s.locked, "Will is locked");
         require(
             msg.sender == s.pendingRecoveryWallet,
             "Only the new wallet can confirm"

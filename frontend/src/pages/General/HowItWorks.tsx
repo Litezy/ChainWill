@@ -6,7 +6,7 @@ const steps = [
     step: "Step 01",
     title: "Create Will",
     description:
-      'Deploy your unique digital notary contract directly to the blockchain. This "Factory Deployment" establishes your sovereign space for legacy management without third-party custodians.',
+      'Assign trusted signers who verify your status and then deploy your unique digital notary contract directly to the blockchain. This "Factory Deployment" establishes your sovereign space for legacy management without third-party custodians.',
     content: (
       <div className="mt-auto flex items-center gap-3 rounded-lg border border-outline-variant bg-surface-container p-3">
         <Icon className="h-4 w-4 text-primary" name="terminal" />
@@ -41,13 +41,13 @@ const steps = [
   {
     icon: "group" as const,
     step: "Step 03",
-    title: "Assign Entities",
+    title: "Assign Beneficiaries",
     description:
-      "Define the trusted signers who verify your status and the beneficiaries who will receive your legacy.",
+      "Define the  beneficiaries who will receive your legacy.",
     content: (
       <div className="mt-auto space-y-3">
         {[
-          ["JD", "John Doe", "Signer", "bg-primary text-on-primary"],
+          ["JD", "John Doe", "Beneficiary", "bg-primary text-on-primary"],
           ["AM", "Alice Miller", "Beneficiary", "bg-secondary-container text-on-secondary-container"],
         ].map(([initials, name, role, tone]) => (
           <div
@@ -190,7 +190,7 @@ export default function HowItWorks() {
           <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-secondary-fixed">
             Step 06
           </span>
-          <h3 className="mb-4 text-xl font-bold">Automatic Distribution</h3>
+          <h3 className="mb-4 text-xl font-bold">Distribution to Beneficiaries </h3>
           <p className="mb-6 flex-grow text-sm leading-relaxed text-secondary-fixed">
             Finality reached. The smart contract executes the pre-approved token
             approvals, distributing assets instantly to your beneficiaries&apos;

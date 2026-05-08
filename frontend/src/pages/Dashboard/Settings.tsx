@@ -153,7 +153,7 @@ const Settings = () => {
               <p className="mt-3 text-sm text-slate-500">Buffer time after inactivity before trigger fires.</p>
             </div>
 
-            <div className="rounded-3xl bg-slate-50 p-4">
+            {/* <div className="rounded-3xl bg-slate-50 p-4">
               <div className="flex items-center justify-between text-sm text-slate-500">
                 <span>Attestation opens in</span>
                 <span className="font-semibold text-slate-950">
@@ -163,7 +163,7 @@ const Settings = () => {
               <p className="mt-3 text-sm text-slate-500">
                 Scheduled for {formatUnixDateTime(attestationOpensAt)}.
               </p>
-            </div>
+            </div> */}
 
             <div className="rounded-3xl bg-slate-50 p-4">
               <div className="flex items-center justify-between text-sm text-slate-500">
